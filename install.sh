@@ -132,6 +132,24 @@ echo "  ✓ Source scripts found"
 
 echo ""
 
+# ─── Step 1b: Add claude-notifications/ to parent repo's .gitignore ───
+parent_git_root="$(cd "$SCRIPT_DIR/.." && git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$parent_git_root" ]]; then
+  parent_gitignore="${parent_git_root}/.gitignore"
+  if [[ -f "$parent_gitignore" ]]; then
+    if ! grep -qxF "claude-notifications/" "$parent_gitignore"; then
+      printf '\n# Claude notifications (cloned installer)\nclaude-notifications/\n' >> "$parent_gitignore"
+      echo "  ✓ Added claude-notifications/ to ${parent_gitignore}"
+    else
+      echo "  ✓ claude-notifications/ already in ${parent_gitignore}"
+    fi
+  else
+    printf '# Claude notifications (cloned installer)\nclaude-notifications/\n' > "$parent_gitignore"
+    echo "  ✓ Created ${parent_gitignore} with claude-notifications/"
+  fi
+  echo ""
+fi
+
 # ─── Step 2: Detect existing installation ───
 EXISTING_RECIPIENT=""
 if [[ -f "${INSTALL_DIR}/send.sh" ]]; then
