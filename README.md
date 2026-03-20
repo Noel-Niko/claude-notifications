@@ -19,7 +19,7 @@ Or non-interactive:
 The installer prompts for your phone number, copies scripts, configures permissions, checks Full Disk Access, sends a test message, and offers an interactive demo.
 
 ## Prerequisites
-
+![FDA.gif](docs/FDA.gif)
 - **macOS** (Messages.app, AppleScript, sqlite3)
 - **iMessage** account signed in to Messages.app
 - **Full Disk Access** for your terminal app (required for reading replies)
