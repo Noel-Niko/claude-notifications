@@ -1,3 +1,11 @@
+# To Use
+ In Claude Code, 
+ - Say 'switch to iMessage' to enable phone mode.
+   - Claude will use notify.sh for all approvals instead of IDE prompts.
+ - Reply 'switch to IDE' on your phone to switch back.
+
+_____
+
 # claude-notifications
 
 iMessage notifications for Claude Code. Send messages to your phone, get approvals via iMessage, and switch between IDE and phone approval modes dynamically.
