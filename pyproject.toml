@@ -1,0 +1,12 @@
+[project]
+name = "claude-notifications"
+version = "1.0.0"
+description = "iMessage notifications for Claude Code"
+requires-python = ">=3.10"
+
+[dependency-groups]
+dev = ["pytest>=9.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: tests requiring Messages.app and iMessage"]
