@@ -32,3 +32,9 @@ Thumbs.db
 
 # uv lock (regenerated from pyproject.toml)
 uv.lock
+
+# Claude Code local settings (created by whitelist_commands.sh per-repo)
+.claude/
+
+# Cloned repo inside itself (if user runs install from within a repo)
+claude-notifications/

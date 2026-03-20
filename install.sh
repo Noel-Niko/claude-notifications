@@ -145,7 +145,7 @@ if [[ -n "$EXISTING_RECIPIENT" && "$EXISTING_RECIPIENT" != "CHANGE_ME" ]]; then
   if [[ -z "$PHONE" ]]; then
     echo ""
     read -p "Keep current recipient? [Y/n] " keep_choice
-    if [[ "${keep_choice,,}" == "n" ]]; then
+    if [[ "$(echo "$keep_choice" | tr '[:upper:]' '[:lower:]')" == "n" ]]; then
       EXISTING_RECIPIENT=""
     else
       PHONE="$EXISTING_RECIPIENT"
@@ -269,18 +269,11 @@ else
   echo "  You can test manually: ${INSTALL_DIR}/send.sh \"Hello\""
 fi
 
-# ─── Step 11: Print CLAUDE.md snippet ───
-echo ""
-echo "════════════════════════════════════════════════════════"
-echo "  Installation complete!"
-echo "════════════════════════════════════════════════════════"
-echo ""
-echo "Add the following to your ~/.claude/CLAUDE.md to enable"
-echo "the iMessage notification skill in all Claude Code sessions:"
-echo ""
-echo "────────────────── copy below ──────────────────"
-cat <<'SNIPPET'
-## iMessage Notifications (MANDATORY) - Dynamic Mode Switching
+# ─── Step 11: Update ~/.claude/CLAUDE.md ───
+CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
+MARKER="## iMessage Notifications (MANDATORY) - Dynamic Mode Switching"
+
+IMESSAGE_BLOCK='## iMessage Notifications (MANDATORY) - Dynamic Mode Switching
 
 **Approval modes:**
 - **IDE mode** (default): Use IDE tools (`AskUserQuestion`, `ExitPlanMode`) for approvals
@@ -292,7 +285,7 @@ cat <<'SNIPPET'
    - Ask: "This is a multi-step task. Want to switch to phone approvals? [Yes/No]"
 3. **Manual switch to phone**: When user says "switch to iMessage" anywhere
 4. **Manual switch to IDE**: When user texts "switch to IDE" to phone (only works in phone mode)
-5. **Track current mode**: Remember which mode you're in throughout the session
+5. **Track current mode**: Remember which mode you'\''re in throughout the session
 
 **In IDE mode:**
 - Use `AskUserQuestion` or `ExitPlanMode` for approvals
@@ -315,7 +308,7 @@ cat <<'SNIPPET'
 
 **Command approval handling:**
 - Run `~/.claude/skills/imessage-notify/whitelist_commands.sh` from each repo to pre-approve commands
-- If you still see "Do you want to proceed?", click Yes once — it's remembered for that session
+- If you still see "Do you want to proceed?", click Yes once — it'\''s remembered for that session
 
 **When in doubt:**
 - For single approvals: Use IDE mode
@@ -324,9 +317,26 @@ cat <<'SNIPPET'
 
 **Setup:**
 - Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol on first use
-- If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh` and relay setup instructions
-SNIPPET
-echo "────────────────── copy above ──────────────────"
+- If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh` and relay setup instructions'
+
+mkdir -p "$(dirname "$CLAUDE_MD")"
+
+if [[ -f "$CLAUDE_MD" ]] && grep -qF "$MARKER" "$CLAUDE_MD"; then
+  echo "  ✓ ~/.claude/CLAUDE.md already contains iMessage Notifications block"
+else
+  # Append with a blank line separator
+  if [[ -f "$CLAUDE_MD" ]] && [[ -s "$CLAUDE_MD" ]]; then
+    printf '\n\n%s\n' "$IMESSAGE_BLOCK" >> "$CLAUDE_MD"
+  else
+    printf '%s\n' "$IMESSAGE_BLOCK" > "$CLAUDE_MD"
+  fi
+  echo "  ✓ iMessage Notifications block added to ~/.claude/CLAUDE.md"
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════"
+echo "  Installation complete!"
+echo "════════════════════════════════════════════════════════"
 echo ""
 echo "Optional: To enable automatic hook notifications, add this to"
 echo "your ~/.claude/settings.json under \"hooks\":"
@@ -356,7 +366,8 @@ echo ""
 echo ""
 read -p "Would you like to run a quick interactive demo? [y/N] " run_demo
 
-if [[ "${run_demo,,}" == "y" || "${run_demo,,}" == "yes" ]]; then
+run_demo_lower="$(echo "$run_demo" | tr '[:upper:]' '[:lower:]')"
+if [[ "$run_demo_lower" == "y" || "$run_demo_lower" == "yes" ]]; then
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
   echo "║              Interactive Demo                        ║"

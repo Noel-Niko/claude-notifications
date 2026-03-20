@@ -23,23 +23,25 @@ check_fda() {
     parent_comm="$(ps -o comm= -p "$PPID" 2>/dev/null || echo "")"
     local frontmost
     frontmost="$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || echo "")"
+    local frontmost_lower
+    frontmost_lower="$(echo "$frontmost" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$term_program" == "vscode" ]] || [[ "$parent_comm" == *"code"* ]] || [[ "${frontmost,,}" == *"code"* ]]; then
+    if [[ "$term_program" == "vscode" ]] || [[ "$parent_comm" == *"code"* ]] || [[ "$frontmost_lower" == *"code"* ]]; then
         app_name="Visual Studio Code"
         app_path="/Applications/Visual Studio Code.app"
-    elif [[ "$parent_comm" == *"pycharm"* ]] || [[ "${frontmost,,}" == *"pycharm"* ]]; then
+    elif [[ "$parent_comm" == *"pycharm"* ]] || [[ "$frontmost_lower" == *"pycharm"* ]]; then
         app_name="PyCharm"
         app_path="/Applications/PyCharm CE.app (or /Applications/PyCharm.app)"
-    elif [[ "$term_program" == "iTerm.app" ]] || [[ "${frontmost,,}" == *"iterm"* ]]; then
+    elif [[ "$term_program" == "iTerm.app" ]] || [[ "$frontmost_lower" == *"iterm"* ]]; then
         app_name="iTerm2"
         app_path="/Applications/iTerm.app"
-    elif [[ "$term_program" == "Apple_Terminal" ]] || [[ "${frontmost,,}" == *"terminal"* ]]; then
+    elif [[ "$term_program" == "Apple_Terminal" ]] || [[ "$frontmost_lower" == *"terminal"* ]]; then
         app_name="Terminal"
         app_path="/System/Applications/Utilities/Terminal.app"
-    elif [[ "$parent_comm" == *"cursor"* ]] || [[ "${frontmost,,}" == *"cursor"* ]]; then
+    elif [[ "$parent_comm" == *"cursor"* ]] || [[ "$frontmost_lower" == *"cursor"* ]]; then
         app_name="Cursor"
         app_path="/Applications/Cursor.app"
-    elif [[ "$parent_comm" == *"warp"* ]] || [[ "${frontmost,,}" == *"warp"* ]]; then
+    elif [[ "$parent_comm" == *"warp"* ]] || [[ "$frontmost_lower" == *"warp"* ]]; then
         app_name="Warp"
         app_path="/Applications/Warp.app"
     fi
