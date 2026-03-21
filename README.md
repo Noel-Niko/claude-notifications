@@ -1,3 +1,4 @@
+
 # To Use
  In Claude Code,
  - Say "use iMessage", "switch to iMessage", or mention "phone" / "away from computer" to enable phone mode.
