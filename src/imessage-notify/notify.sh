@@ -2,6 +2,7 @@
 # notify.sh — Send an iMessage and wait for a reply
 # Usage: notify.sh "Your message here" [timeout_seconds] [poll_interval_seconds]
 #    or: echo "message" | notify.sh - [timeout_seconds] [poll_interval_seconds]
+#    or: notify.sh -f /path/to/message.txt [timeout_seconds] [poll_interval_seconds]
 # Output (stdout): The reply text, or exits 1 on timeout
 #
 # Supports multi-repo routing: messages are tagged with repo name and request ID.
@@ -11,12 +12,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Accept message from argument or stdin (use "-" to read stdin)
-if [ "${1:-}" = "-" ]; then
+# Accept message from argument, stdin ("-"), or file ("-f <path>")
+if [ "${1:-}" = "-f" ]; then
+  filepath="${2:?Usage: notify.sh -f <filepath> [timeout] [poll_interval]}"
+  message="$(cat "$filepath")"
+  rm -f "$filepath"
+  shift 2
+elif [ "${1:-}" = "-" ]; then
   message="$(cat)"
   shift
 else
-  message="${1:?Usage: notify.sh \"message text\" [timeout] [poll_interval] OR echo \"message\" | notify.sh - [timeout] [poll_interval]}"
+  message="${1:?Usage: notify.sh \"message text\" [timeout] [poll_interval] OR notify.sh -f <filepath> [timeout] [poll_interval]}"
   shift
 fi
 timeout="${1:-300}"

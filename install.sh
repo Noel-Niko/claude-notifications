@@ -289,49 +289,39 @@ fi
 
 # ─── Step 11: Update ~/.claude/CLAUDE.md ───
 CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
-MARKER="## iMessage Notifications (MANDATORY) - Dynamic Mode Switching"
+MARKER="## iMessage Notifications (MANDATORY)"
 
-IMESSAGE_BLOCK='## iMessage Notifications (MANDATORY) - Dynamic Mode Switching
+IMESSAGE_BLOCK='## iMessage Notifications (MANDATORY)
 
-**Approval modes:**
-- **IDE mode** (default): Use IDE tools (`AskUserQuestion`, `ExitPlanMode`) for approvals
-- **Phone mode**: Use `notify.sh` for phone-only approvals
+**Two modes:** IDE mode (default) and Phone mode.
 
-**Mode switching protocol:**
-1. **Default**: Start in IDE mode
-2. **Offer phone mode** when you detect multi-step tasks (3+ approval points):
-   - Ask: "This is a multi-step task. Want to switch to phone approvals? [Yes/No]"
-3. **Manual switch to phone**: When user says "switch to iMessage" anywhere
-4. **Manual switch to IDE**: When user texts "switch to IDE" to phone (only works in phone mode)
-5. **Track current mode**: Remember which mode you'\''re in throughout the session
+**Automatic phone mode triggers — no confirmation needed:**
+If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, **immediately switch to phone mode**. Do not ask for confirmation. Do not offer — just switch.
 
-**In IDE mode:**
+**Manual switches:**
+- User says "switch to iMessage" → phone mode immediately
+- User texts "switch to IDE" (via iMessage reply) → IDE mode immediately
+
+**After /compact:** Re-read this section. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
+
+**IDE mode behavior:**
 - Use `AskUserQuestion` or `ExitPlanMode` for approvals
-- Optionally use `send.sh` for fire-and-forget notifications (no reply expected)
-- Watch for user saying "switch to iMessage"
+- Optionally use `send.sh` for fire-and-forget status updates
 
-**In Phone mode:**
-- For short single-line messages, use argument mode:
-  ```bash
-  ~/.claude/skills/imessage-notify/notify.sh "Your message here" 600 10
-  ```
-- For long or multiline messages, use stdin mode to avoid permission prompt issues:
-  ```bash
-  echo "Your multiline message here" | ~/.claude/skills/imessage-notify/notify.sh - 600 10
-  ```
-- Same for fire-and-forget: `echo "msg" | ~/.claude/skills/imessage-notify/send.sh -`
-- Check every reply for "switch to IDE" command
-- If detected, switch back to IDE mode and confirm the switch
-- Include full context in messages (options, questions, everything user needs)
+**Phone mode behavior:**
+- Use `notify.sh` for ALL approvals — never show IDE prompts
+- Use `send.sh` for fire-and-forget status updates
+- Check every reply for "switch to IDE"
+- Include full context in messages (the user only sees their phone)
 
-**Command approval handling:**
-- Run `~/.claude/skills/imessage-notify/whitelist_commands.sh` from each repo to pre-approve commands
-- If you still see "Do you want to proceed?", click Yes once — it'\''s remembered for that session
-
-**When in doubt:**
-- For single approvals: Use IDE mode
-- For 3+ step tasks: Offer phone mode
-- Let user choose their preference
+**Sending messages (IMPORTANT — use file mode for multiline):**
+- **Short single-line**: `~/.claude/skills/imessage-notify/notify.sh "Short msg" 600 10`
+- **Multiline or long messages**: Use the Write tool to create a temp file, then pass it with `-f`:
+  1. Write message to `/tmp/imessage-notify-msg-{uuid}.txt` using the Write tool
+  2. Run: `~/.claude/skills/imessage-notify/notify.sh -f /tmp/imessage-notify-msg-{uuid}.txt 600 10`
+  - The `-f` flag reads the file and deletes it after sending
+  - This avoids CLI permission prompts that block multiline Bash commands
+- **Fire-and-forget**: Same patterns but with `send.sh` instead of `notify.sh`
 
 **Setup:**
 - Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol on first use

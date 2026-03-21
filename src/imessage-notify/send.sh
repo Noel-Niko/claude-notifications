@@ -2,6 +2,7 @@
 # send.sh — Send a tagged iMessage and output the request ID + timestamp
 # Usage: send.sh "Your message here"
 #    or: echo "message" | send.sh -
+#    or: send.sh -f /path/to/message.txt   (reads file, deletes it after)
 # Output (stdout): REQ_ID=<id> SENT_EPOCH=<epoch>
 #
 # Messages are tagged with the repo name and a unique request ID:
@@ -13,11 +14,15 @@ RECIPIENT="CHANGE_ME"
 CHAT_ID="any;-;${RECIPIENT}"
 PENDING_DIR="/tmp/imessage-notify-pending"
 
-# Accept message from argument or stdin (use "-" to read stdin)
-if [ "${1:-}" = "-" ]; then
+# Accept message from argument, stdin ("-"), or file ("-f <path>")
+if [ "${1:-}" = "-f" ]; then
+  filepath="${2:?Usage: send.sh -f <filepath>}"
+  message="$(cat "$filepath")"
+  rm -f "$filepath"
+elif [ "${1:-}" = "-" ]; then
   message="$(cat)"
 else
-  message="${1:?Usage: send.sh \"message text\" OR echo \"message\" | send.sh -}"
+  message="${1:?Usage: send.sh \"message text\" OR echo \"message\" | send.sh - OR send.sh -f <filepath>}"
 fi
 
 # Auto-detect repo name from git, fall back to current directory name

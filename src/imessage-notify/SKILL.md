@@ -5,54 +5,47 @@ Send iMessages to the user's phone and read their replies. Use this for approval
 ## Quick Decision Tree
 
 ```
-Need user approval?
-├─ In IDE mode? (default)
-│  ├─ Single approval → Use AskUserQuestion (NOT notify.sh)
-│  └─ 3+ step task → Offer phone mode switch via AskUserQuestion
-│     ├─ User says YES → Switch to phone mode
-│     └─ User says NO → Stay in IDE mode
-│
-└─ In Phone mode?
-   └─ Use notify.sh for ALL approvals
-      └─ Check each reply for "switch to IDE" command
+User mentions "iMessage" / "phone" / "away from computer"?
+└─ YES → Switch to phone mode immediately (no confirmation)
+
+In IDE mode? (default)
+├─ Use AskUserQuestion / ExitPlanMode for approvals
+└─ Use send.sh for optional fire-and-forget status updates
+
+In Phone mode?
+├─ Use notify.sh for ALL approvals
+├─ Use send.sh for fire-and-forget status updates
+└─ Check each reply for "switch to IDE"
 
 Status update (no reply needed)?
-└─ Use send.sh (any mode)
+└─ Use send.sh (works in either mode)
 ```
 
-## Mode-Switching Protocol (IMPORTANT)
+## Mode-Switching Protocol
 
-**Two approval modes:**
-- **IDE mode** (default): Use IDE tools (`AskUserQuestion`, `ExitPlanMode`) for approvals
-- **Phone mode**: Use `notify.sh` for phone-only approvals (user responds via iMessage)
+**Two modes:** IDE mode (default) and Phone mode.
 
-**When to switch modes:**
+**Automatic phone mode triggers — no confirmation needed:**
+If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, **immediately switch to phone mode**. Do not ask. Do not offer. Just switch.
 
-1. **Start in IDE mode** by default
-2. **Offer phone mode** for multi-step tasks (3+ approval points):
-   - Use `AskUserQuestion` to ask: "This is a multi-step task. Want to switch to phone approvals? [Yes/No]"
-   - If user says yes, switch to phone mode for all subsequent approvals
-3. **Manual switch to phone**: User says "switch to iMessage" in any response
-4. **Manual switch to IDE**: User texts "switch to IDE" to their phone (while in phone mode)
-5. **Track current mode** throughout the session
+**Manual switches:**
+- User says "switch to iMessage" → phone mode immediately
+- User texts "switch to IDE" (via iMessage reply) → IDE mode immediately
 
-**In IDE mode:**
-- Use `AskUserQuestion` or `ExitPlanMode` for approvals (DO NOT use notify.sh)
+**After /compact:** Re-read this section. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
+
+**IDE mode behavior:**
+- Use `AskUserQuestion` or `ExitPlanMode` for approvals (DO NOT use notify.sh for approvals)
 - Optionally use `send.sh` for fire-and-forget status updates
-- Watch for user saying "switch to iMessage"
 
-**In Phone mode:**
+**Phone mode behavior:**
 - Use ONLY `notify.sh` for approvals (DO NOT show IDE prompts)
+- Use `send.sh` for fire-and-forget status updates
 - Check every reply for "switch to IDE" command
 - If detected, switch back to IDE mode and confirm
+- Include full context in messages (the user only sees their phone)
 
 **CRITICAL: NEVER use both IDE approvals and notify.sh simultaneously for the same approval. Pick ONE based on current mode.**
-
-## When to Use
-
-- **Phone mode**: Multi-step tasks where user wants to respond from anywhere
-- **Status updates**: Use `send.sh` for fire-and-forget notifications
-- **Single approvals**: Default to IDE mode unless user requests phone mode
 
 ## Scripts
 
@@ -61,11 +54,13 @@ All scripts are located in `~/.claude/skills/imessage-notify/`.
 ### Send Only (no wait)
 
 ```bash
-# Short single-line messages (argument mode):
+# Short single-line messages:
 ~/.claude/skills/imessage-notify/send.sh "Your message here"
 
-# Long or multiline messages (stdin mode — avoids permission prompt issues):
-echo "Your message here" | ~/.claude/skills/imessage-notify/send.sh -
+# Multiline messages — use file mode (avoids CLI permission prompts):
+# Step 1: Use the Write tool to create /tmp/imessage-notify-msg-<uuid>.txt
+# Step 2: Run:
+~/.claude/skills/imessage-notify/send.sh -f /tmp/imessage-notify-msg-<uuid>.txt
 ```
 
 Outputs: `REQ_ID=<id> SENT_EPOCH=<epoch>`
@@ -75,23 +70,23 @@ Messages are auto-tagged with the repo name and request ID:
 [my-repo|REQ-a1b2c3d4] Your message here
 ```
 
-**IMPORTANT:** For multiline messages, always use stdin mode (`echo "msg" | send.sh -`).
-The permission pattern `send.sh *` does not match newlines in arguments, so multiline
-argument-mode calls will trigger IDE approval prompts.
-
 ### Send and Wait for Reply
 
 ```bash
 # Short single-line messages:
 ~/.claude/skills/imessage-notify/notify.sh "Your question here" [timeout_seconds] [poll_interval_seconds]
 
-# Long or multiline messages (stdin mode):
-echo "Your question here" | ~/.claude/skills/imessage-notify/notify.sh - [timeout_seconds] [poll_interval_seconds]
+# Multiline messages — use file mode:
+# Step 1: Use the Write tool to create /tmp/imessage-notify-msg-<uuid>.txt
+# Step 2: Run:
+~/.claude/skills/imessage-notify/notify.sh -f /tmp/imessage-notify-msg-<uuid>.txt [timeout_seconds] [poll_interval_seconds]
 ```
 
 - Default timeout: 300 seconds (5 minutes)
 - Default poll interval: 10 seconds
 - Outputs the user's reply text on success, exits 1 on timeout
+
+**WHY file mode?** Claude Code's permission system uses glob patterns to whitelist Bash commands. The glob `*` does not match newlines, so any multiline Bash command (heredoc, multiline echo) will trigger an IDE "Do you want to proceed?" prompt — which defeats the purpose of phone mode. The `-f` flag keeps the Bash command on a single line regardless of message length, matching the existing `notify.sh *` permission pattern.
 
 ### Read Only (poll for reply after a known send time)
 
@@ -134,63 +129,48 @@ yes
 
 ## Example Usage in Claude Code
 
-### Example 1: Single approval (IDE mode - default)
+### Example 1: IDE mode (default) — single approval
 
-```bash
-# Use AskUserQuestion tool for single approvals
-# DO NOT use notify.sh in IDE mode
+```
+Use AskUserQuestion tool. DO NOT use notify.sh.
 ```
 
-### Example 2: Multi-step task (offer phone mode)
+### Example 2: User says "use iMessage" — switch immediately
 
-```bash
-# Step 1: Detect multi-step task, offer phone mode switch
-# Use AskUserQuestion: "This is a multi-step task. Switch to phone approvals? [Yes/No]"
-
-# Step 2a: If user says YES, switch to phone mode
-reply=$(~/.claude/skills/imessage-notify/notify.sh "Step 1/5: Refactor auth module. Reply APPROVE or SKIP." 600 10)
-# Continue with notify.sh for all remaining steps
-# Check each reply for "switch to IDE" command
-
-# Step 2b: If user says NO, stay in IDE mode
-# Use AskUserQuestion for all approvals (DO NOT use notify.sh)
+```
+User: "Research this topic, use iMessage to communicate"
+→ Immediately enter phone mode. No confirmation prompt.
+→ Send first message via notify.sh.
 ```
 
-### Example 3: Fire-and-forget status update
+### Example 3: Multiline phone mode approval (file mode)
+
+```
+1. Use Write tool to create /tmp/imessage-notify-msg-abc123.txt with the full message
+2. Run: ~/.claude/skills/imessage-notify/notify.sh -f /tmp/imessage-notify-msg-abc123.txt 600 10
+3. The script reads the file, sends it, deletes the temp file
+```
+
+### Example 4: Fire-and-forget status update (either mode)
 
 ```bash
-# Use send.sh for status updates that don't need a reply
 ~/.claude/skills/imessage-notify/send.sh "Tests passed. All 42 tests green."
 ```
 
-### Example 4: Phone mode approval with mode-switch detection
+### Example 5: Phone mode with switch-to-IDE detection
 
 ```bash
-# When in phone mode, always check replies for "switch to IDE"
-reply=$(~/.claude/skills/imessage-notify/notify.sh "Step 2/5: Update database schema. Reply APPROVE or SKIP." 600 10)
-
-if [[ "$reply" =~ [Ss]witch\ to\ IDE ]]; then
-    # Switch back to IDE mode, use AskUserQuestion for remaining approvals
-    echo "Switching back to IDE mode..."
-fi
+reply=$(~/.claude/skills/imessage-notify/notify.sh "Deploy to staging? YES or NO" 600 10)
+# If reply contains "switch to IDE", switch back to IDE mode
 ```
 
 ### WRONG Examples (DO NOT DO THIS)
 
 ```bash
 # WRONG: Showing IDE prompt AND sending notify.sh simultaneously
-reply=$(~/.claude/skills/imessage-notify/notify.sh "Approve?" 600 10) &
-# AskUserQuestion simultaneously
-# This creates double-approval confusion!
-
-# WRONG: Using notify.sh in IDE mode
-reply=$(~/.claude/skills/imessage-notify/notify.sh "Single approval question" 600)
-# Use AskUserQuestion instead when in IDE mode
-
-# WRONG: Sending iMessage AFTER IDE approval
-# AskUserQuestion first
-~/.claude/skills/imessage-notify/send.sh "FYI: you already approved this"
-# User gets notification AFTER they already responded - useless!
+# WRONG: Using notify.sh in IDE mode for approvals
+# WRONG: Using heredoc/multiline echo to pipe into notify.sh (triggers permission prompts)
+# WRONG: Asking "Want to switch to phone mode?" when user already said "use iMessage"
 ```
 
 ## Requirements
@@ -200,9 +180,9 @@ reply=$(~/.claude/skills/imessage-notify/notify.sh "Single approval question" 60
 - An existing iMessage conversation with the recipient
 - **Commands whitelisted** to avoid IDE approval prompts (see below)
 
-## CRITICAL: Whitelist Commands to Avoid IDE Interruptions
+## Whitelist Commands
 
-**Problem:** If bash commands require IDE approval, phone mode will be blocked. The IDE will prompt "Do you want to proceed?" BEFORE sending the message to your phone, defeating the purpose of phone mode.
+**Problem:** Claude Code's CLI gates every Bash command through a permission check. If the command pattern isn't whitelisted, the IDE shows "Do you want to proceed?" — blocking phone mode since the user is away.
 
 **Solution:** Run the whitelist script from inside each repo where you want phone mode:
 
@@ -211,36 +191,21 @@ cd /path/to/your/repo
 ~/.claude/skills/imessage-notify/whitelist_commands.sh
 ```
 
-This script automatically injects wildcard permission entries into:
+This injects permission entries into:
 1. The repo's `.claude/settings.local.json`
 2. The global `~/.claude/settings.json`
 
 Run once per repo. It's idempotent (safe to run multiple times).
 
-**Fallback: Approve when prompted**
-- If you still see "Do you want to proceed?" for notify.sh, click "Yes"
-- The approval is remembered for future uses in that session
-
-**Alternative: Pre-approve in plan mode**
-- Use `ExitPlanMode` with `allowedPrompts` to pre-approve:
-  ```
-  allowedPrompts: [
-    {tool: "Bash", prompt: "iMessage notifications"}
-  ]
-  ```
+**The `-f` flag solves the multiline gap.** The whitelisted pattern `notify.sh *` matches `notify.sh -f /tmp/file.txt 600 10` because it's a single line. Without `-f`, multiline piped commands (`echo "...\n..." | notify.sh -`) would NOT match the glob because `*` doesn't cross newlines.
 
 ## Error Handling
 
-All scripts now include comprehensive error checking and will:
+All scripts include error checking and will:
 - Check if Messages app is running before attempting to send
 - Validate AppleScript execution succeeded
 - Provide specific troubleshooting steps on failure
 - Return non-zero exit codes on errors
-
-**When errors occur, the scripts will output:**
-- Clear error message describing what failed
-- Specific troubleshooting steps to fix the issue
-- Exit code 1 (check with `$?`)
 
 ## Troubleshooting
 
@@ -266,6 +231,11 @@ All scripts now include comprehensive error checking and will:
 - Check for special characters in messages (now properly escaped)
 - Verify Messages app can send to the recipient normally
 - Check iMessage service status at https://www.apple.com/support/systemstatus/
+
+### IDE still shows "Do you want to proceed?"
+- Run `~/.claude/skills/imessage-notify/whitelist_commands.sh` from the repo
+- Make sure you're using `-f` file mode for multiline messages, not heredoc/pipe
+- Click "Yes" once as fallback — the approval is remembered for that session
 
 ## FDA Verification
 
