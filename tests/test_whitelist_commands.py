@@ -6,7 +6,6 @@ configuration, idempotency, and edge cases.
 
 import json
 
-import pytest
 
 from conftest import (
     EXPECTED_PERMISSIONS,
@@ -209,11 +208,15 @@ class TestRecipientConsistency:
 
     def test_both_files_updated_phone(self, whitelist_sandbox):
         run_whitelist(whitelist_sandbox, "555-867-5309")
-        assert get_recipient(whitelist_sandbox["send_sh"]) == get_recipient(whitelist_sandbox["read_sh"])
+        assert get_recipient(whitelist_sandbox["send_sh"]) == get_recipient(
+            whitelist_sandbox["read_sh"]
+        )
 
     def test_both_files_updated_email(self, whitelist_sandbox):
         run_whitelist(whitelist_sandbox, "test@example.com")
-        assert get_recipient(whitelist_sandbox["send_sh"]) == get_recipient(whitelist_sandbox["read_sh"])
+        assert get_recipient(whitelist_sandbox["send_sh"]) == get_recipient(
+            whitelist_sandbox["read_sh"]
+        )
 
     def test_overwrite_previous_recipient(self, whitelist_sandbox):
         run_whitelist(whitelist_sandbox, "old@example.com")

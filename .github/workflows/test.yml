@@ -1,5 +1,18 @@
 name: Tests
 
+env:
+  namespace: digitalassistantdomain
+  vault-team-name: digitalassistantdomain
+  HCP_VAULT_NAMESPACE: admin/b190321b8711e61029e4b805dabb3554
+  vault_url: ${{ vars.HCP_VAULT_PROD_URL }}
+  ROSTER_ID: b190321b8711e61029e4b805dabb3554
+  TEAM_NAME: digitalassistantdomain
+
+permissions:
+  id-token: write
+  contents: read
+  actions: write
+
 on:
   push:
     branches: [main, master]
@@ -18,3 +31,74 @@ jobs:
       - name: Run unit tests
         run: uv run pytest -m "not integration" -v
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run Ruff Code Validation
+        run: uvx ruff check . --verbose --show-files --extend-select TD
+      - name: Run Ruff Format Check
+        run: uvx ruff format --check
+      - name: Ruff Failure Guidance
+        if: failure()
+        run: |
+          echo ""
+          echo "❌ Ruff checks failed!"
+          echo ""
+          echo "🔧 Upgrade your local Ruff to match CI/CD version:"
+          echo "   uv tool install ruff"
+          echo ""
+        continue-on-error: true
+
+  publish-to-artifactory:
+    name: Publish to Artifactory
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - lint
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure pypi
+        id: config-pypi
+        uses: wwg-internal/action-pypi-configure@v1
+        with:
+          roster-id: b190321b8711e61029e4b805dabb3554
+
+      - name: Build and publish package
+        run: |
+          set -euo pipefail
+
+          pip install wheel twine build
+
+          echo "Building package..."
+          python -m build
+
+          echo "Uploading package to Artifactory..."
+          if python -m twine upload \
+            --repository-url https://graingerinc.jfrog.io/artifactory/api/pypi/b190321b8711e61029e4b805dabb3554-pypi-virtual \
+            dist/* \
+            -u${{ steps.config-pypi.outputs.username }} \
+            -p${{ steps.config-pypi.outputs.access-token }}; then
+            echo "Package uploaded successfully to Artifactory"
+          else
+            echo "Failed to upload package to Artifactory"
+            echo "Check the following:"
+            echo "   - Package files exist in dist/"
+            echo "   - PyPI credentials are valid"
+            echo "   - Package version doesn't already exist"
+            echo "   - Repository URL is accessible"
+            exit 1
+          fi
