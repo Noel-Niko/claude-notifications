@@ -17,6 +17,9 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest -m "not integration" -v
+  lint:
+    runs-on: ubuntu-latest
+    steps:
       - name: Run Ruff Code Validation
         run: uvx ruff check . --verbose --show-files --extend-select TD
       - name: Run Ruff Format Check
