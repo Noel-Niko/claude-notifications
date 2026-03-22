@@ -17,4 +17,17 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest -m "not integration" -v
-
+      - name: Run Ruff Code Validation
+        run: uvx ruff check . --verbose --show-files --extend-select TD
+      - name: Run Ruff Format Check
+        run: uvx ruff format --check
+      - name: Ruff Failure Guidance
+        if: failure()
+        run: |
+          echo ""
+          echo "❌ Ruff checks failed!"
+          echo ""
+          echo "🔧 Upgrade your local Ruff to match CI/CD version:"
+          echo "   uv tool install ruff"
+          echo ""
+        continue-on-error: true

@@ -143,7 +143,7 @@ def patch_send_sh(sandbox, pending_dir=None, mock_applescript=True):
         # Replace pgrep check with always-true
         content = content.replace(
             'if ! pgrep -x "Messages" >/dev/null; then',
-            'if false; then',
+            "if false; then",
         )
         # Replace osascript call with a no-op that succeeds
         content = re.sub(

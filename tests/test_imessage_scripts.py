@@ -105,7 +105,7 @@ class TestSendStdinMode:
         assert result.returncode == 0
 
     def test_stdin_with_special_chars(self, script_sandbox):
-        msg = 'Quotes: "hello" and \'world\'\nBackslash: \\\nDollar: $100'
+        msg = "Quotes: \"hello\" and 'world'\nBackslash: \\\nDollar: $100"
         result = run_send(script_sandbox, "-", stdin_text=msg)
         assert result.returncode == 0
 
@@ -273,7 +273,7 @@ class TestNotifyArgumentParsing:
         """notify.sh should forward the message to send.sh."""
         # Patch send.sh to just echo and exit (skip the actual send)
         script_sandbox["send_sh"].write_text(
-            '#!/usr/bin/env bash\n'
+            "#!/usr/bin/env bash\n"
             'echo "MSG=$1"\n'
             'echo "REQ_ID=abc12345 SENT_EPOCH=1234567890"\n'
         )
@@ -298,7 +298,7 @@ class TestNotifyArgumentParsing:
     def test_stdin_mode_passes_message_to_send(self, script_sandbox):
         """notify.sh with "-" should read stdin and forward to send.sh."""
         script_sandbox["send_sh"].write_text(
-            '#!/usr/bin/env bash\n'
+            "#!/usr/bin/env bash\n"
             'echo "MSG=$1"\n'
             'echo "REQ_ID=abc12345 SENT_EPOCH=1234567890"\n'
         )
@@ -323,12 +323,12 @@ class TestNotifyArgumentParsing:
     def test_default_timeout(self, script_sandbox):
         """notify.sh should default to 300s timeout."""
         content = script_sandbox["notify_sh"].read_text()
-        assert '${1:-300}' in content
+        assert "${1:-300}" in content
 
     def test_default_poll_interval(self, script_sandbox):
         """notify.sh should default to 10s poll interval."""
         content = script_sandbox["notify_sh"].read_text()
-        assert '${2:-10}' in content
+        assert "${2:-10}" in content
 
 
 # =============================================================================
@@ -342,8 +342,7 @@ class TestNotifySendIntegration:
     def test_parses_req_id_from_send_output(self, script_sandbox):
         """notify.sh extracts REQ_ID from send.sh output."""
         script_sandbox["send_sh"].write_text(
-            '#!/usr/bin/env bash\n'
-            'echo "REQ_ID=deadbeef SENT_EPOCH=1700000000"\n'
+            '#!/usr/bin/env bash\necho "REQ_ID=deadbeef SENT_EPOCH=1700000000"\n'
         )
         os.chmod(str(script_sandbox["send_sh"]), 0o755)
 
@@ -367,9 +366,7 @@ class TestNotifySendIntegration:
     def test_fails_if_send_fails(self, script_sandbox):
         """notify.sh should exit 1 if send.sh fails."""
         script_sandbox["send_sh"].write_text(
-            "#!/usr/bin/env bash\n"
-            'echo "ERROR: test failure" >&2\n'
-            "exit 1\n"
+            '#!/usr/bin/env bash\necho "ERROR: test failure" >&2\nexit 1\n'
         )
         os.chmod(str(script_sandbox["send_sh"]), 0o755)
 
@@ -389,8 +386,7 @@ class TestNotifySendIntegration:
         way, the exit code must be non-zero.
         """
         script_sandbox["send_sh"].write_text(
-            "#!/usr/bin/env bash\n"
-            'echo "garbage output"\n'
+            '#!/usr/bin/env bash\necho "garbage output"\n'
         )
         os.chmod(str(script_sandbox["send_sh"]), 0o755)
 
@@ -447,7 +443,7 @@ class TestReadClaimMechanism:
     def test_claim_dir_format(self):
         """Claim directories use .claim-<rowid> format."""
         content = (SKILL_DIR / "read.sh").read_text()
-        assert '.claim-${msg_rowid}' in content
+        assert ".claim-${msg_rowid}" in content
 
     def test_cleanup_on_exit(self):
         """Pending request file is cleaned up on exit via trap."""
