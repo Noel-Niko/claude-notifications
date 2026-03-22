@@ -3,6 +3,7 @@
  In Claude Code,
 - Starting NEW SESSION, 
   - Recommended first command "Review Claude.md and switch to iMessage mode"
+    - Will ask in IDE for pemission to read CLAUDE.md then start iMessage mode.
 - Within an Existing Session
  - Say "use iMessage", "switch to iMessage", or mention "phone" / "away from computer" to enable phone mode.
    - Claude will use notify.sh for all approvals instead of IDE prompts.
