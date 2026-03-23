@@ -103,6 +103,7 @@ pip install --upgrade claude-notifications
 | **Git clone + install.sh** | Development, latest changes | `git clone ... && ./install.sh` |
 
 ## Prerequisites
+![fda.jpg](docs/fda.jpg)
 ![FDA.gif](docs/FDA.gif)
 - **macOS** (Messages.app, AppleScript, sqlite3)
 - **iMessage** account signed in to Messages.app
