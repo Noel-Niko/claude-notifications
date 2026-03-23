@@ -3,6 +3,7 @@
  In Claude Code,
 - Starting NEW SESSION, 
   - Recommended first command "Review Claude.md and switch to iMessage mode"
+    - Will ask in IDE for pemission to read CLAUDE.md then start iMessage mode.
 - Within an Existing Session
  - Say "use iMessage", "switch to iMessage", or mention "phone" / "away from computer" to enable phone mode.
    - Claude will use notify.sh for all approvals instead of IDE prompts.
@@ -29,6 +30,77 @@ Or non-interactive:
 ```
 
 The installer prompts for your phone number, copies scripts, configures permissions, checks Full Disk Access, sends a test message, and offers an interactive demo.
+
+## Installation via Internal Artifactory (pip)
+
+The `claude-notifications` package is published to Grainger's internal JFrog Artifactory.
+
+- **Package**: https://graingerinc.jfrog.io/ui/packages/pypi:%2F%2Fclaude-notifications/1.0.0
+
+### Step 1: Configure pip Authentication
+
+This is a one-time setup per machine.
+
+1. Navigate to [LaunchPoint - JFrog Artifactory Python Setup](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/) and generate your personal authentication token.
+
+2. Configure `~/.pip/pip.conf`:
+
+```bash
+mkdir -p ~/.pip
+
+# Replace YOUR_EMAIL and YOUR_TOKEN with values from LaunchPoint
+cat > ~/.pip/pip.conf << 'EOF'
+[global]
+index-url = https://YOUR_EMAIL@grainger.com:YOUR_TOKEN@graingerinc.jfrog.io/artifactory/api/pypi/pypi-shared-virtual/simple
+EOF
+
+# Verify configuration
+pip config list
+```
+
+### Step 2: Install the Package
+
+```bash
+# uv
+uv add claude-notifications==1.0.0
+
+# pip
+pip install claude-notifications==1.0.0
+```
+
+Then run the installer to configure scripts and permissions:
+
+```bash
+cd $(python -c "import importlib.resources; print(importlib.resources.files('claude_notifications'))")
+./install.sh
+```
+
+### Step 3: Upgrade to Latest Version
+
+```bash
+pip install --upgrade claude-notifications
+```
+
+### Troubleshooting Artifactory Installation
+
+#### "Could not find a version that satisfies the requirement"
+
+**Cause:** `pip.conf` not configured or authentication token expired.
+
+1. Verify pip configuration: `pip config list`
+2. Regenerate token from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/)
+3. Update `~/.pip/pip.conf` with new token
+
+#### "401 Unauthorized" or "403 Forbidden"
+
+**Cause:** Invalid or expired authentication token. Regenerate from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/) and update `~/.pip/pip.conf`.
+
+### Installation Methods Comparison
+
+| Method | Use Case | Command |
+|--------|----------|---------|
+| **Artifactory (pip)** | Stable releases | `pip install claude-notifications` |
+| **Git clone + install.sh** | Development, latest changes | `git clone ... && ./install.sh` |
 
 ## Prerequisites
 ![FDA.gif](docs/FDA.gif)
