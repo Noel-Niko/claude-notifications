@@ -27,9 +27,10 @@ Or non-interactive:
 ```bash
 ./install.sh --phone +15551234567
 ./install.sh --phone your.email@icloud.com
+./install.sh --phone nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
 ```
 
-The installer prompts for your phone number, copies scripts, configures permissions, checks Full Disk Access, sends a test message, and offers an interactive demo.
+The installer prompts for your phone number and optional reply aliases, copies scripts, configures permissions, checks Full Disk Access, sends a test message, and offers an interactive demo.
 
 ## Installation via Internal Artifactory (pip)
 
@@ -117,9 +118,9 @@ pip install --upgrade claude-notifications
 |--------|---------|
 | `send.sh` | Fire-and-forget iMessage (no reply expected) |
 | `notify.sh` | Send message and wait for reply via iMessage |
-| `read.sh` | Poll chat.db for replies (used by notify.sh) |
+| `read.sh` | Poll chat.db for replies (used by notify.sh), supports aliases |
 | `check_fda.sh` | Verify Full Disk Access is granted |
-| `whitelist_commands.sh` | Inject permissions + configure RECIPIENT |
+| `whitelist_commands.sh` | Inject permissions + configure RECIPIENT and aliases |
 | `hook_notify.sh` | Claude Code hook wrapper (debounced) |
 
 ## Usage
@@ -172,7 +173,7 @@ git pull
 ./install.sh
 ```
 
-The installer is idempotent. It detects your existing RECIPIENT and offers to keep it.
+The installer is idempotent. It detects your existing RECIPIENT and aliases and offers to keep them.
 
 ## Uninstall
 
@@ -188,6 +189,24 @@ Multiple Claude Code sessions can run simultaneously without cross-talk:
 - Each message is tagged: `[repo-name|REQ-<unique-id>] message`
 - Reply with the ID to target a specific session: `a1b2c3d4 yes`
 - Plain replies go to the most recent pending request
+
+## Reply Routing / Aliases
+
+When you send to an email address (e.g., `nnosse@wgu.edu`), your phone may reply from a different iMessage identity (e.g., your phone number `+13522339160`). macOS puts that reply in a separate chat, so `read.sh` won't find it unless it knows about all your identities.
+
+**Configure during install:**
+```bash
+./install.sh
+# The installer auto-detects linked identities from chat.db (Ventura+)
+# and prompts for manual entry as fallback.
+```
+
+**Configure manually:**
+```bash
+~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+```
+
+**Find your identities:** Open Messages.app → Settings → iMessage → "You can be reached for messages at."
 
 ## Architecture: Two-Layer Permission Problem and Solution
 
@@ -254,6 +273,13 @@ If only one layer is configured, phone mode will partially fail:
 1. Check Messages.app is running and signed in
 2. Verify Full Disk Access: `~/.claude/skills/imessage-notify/check_fda.sh`
 3. Test manually: `~/.claude/skills/imessage-notify/send.sh "test"`
+
+### Replies not detected / TIMEOUT
+Your phone may reply from a different iMessage address than the one you sent to. Configure aliases so `read.sh` checks all your identities:
+```bash
+~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+```
+See [Reply Routing / Aliases](#reply-routing--aliases) above.
 
 ### "Do you want to proceed?" keeps appearing
 ```bash
