@@ -207,6 +207,37 @@ All scripts include error checking and will:
 - Provide specific troubleshooting steps on failure
 - Return non-zero exit codes on errors
 
+## Reply Routing / Aliases
+
+When you send a message to `nnosse@wgu.edu`, your phone might reply from a
+different iMessage identity (e.g., `+13522339160`). macOS puts that reply in a
+separate chat, so `read.sh` won't find it unless it knows about all your identities.
+
+**How it works:** `read.sh` has a `RECIPIENT_ALIASES` variable. The SQL query uses
+`WHERE chat_identifier IN (recipient, alias1, alias2, ...)` to check all chat
+windows for replies.
+
+**Configure aliases during install:**
+```bash
+./install.sh
+# The installer will prompt for aliases after the phone/email step.
+# It will attempt auto-detection from chat.db (Ventura+) first.
+```
+
+**Configure aliases manually (non-interactive):**
+```bash
+./install.sh --phone nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+```
+
+**Reconfigure aliases post-install:**
+```bash
+~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+```
+
+**Find your iMessage identities:**
+Open Messages.app → Settings → iMessage. The "You can be reached for messages at"
+list shows all your addresses. Add any that your phone might use as the sender.
+
 ## Troubleshooting
 
 ### "ERROR: Messages app is not running"
@@ -221,6 +252,7 @@ All scripts include error checking and will:
 4. Check Full Disk Access: `~/.claude/skills/imessage-notify/check_fda.sh`
 
 ### "TIMEOUT: No reply received"
+- Your phone may reply from a different iMessage address — configure aliases (see "Reply Routing / Aliases" above)
 - Verify you replied to the correct iMessage conversation
 - Check that your phone has connectivity
 - Ensure the RECIPIENT in send.sh and read.sh match

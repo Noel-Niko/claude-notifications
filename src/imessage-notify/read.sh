@@ -13,6 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RECIPIENT="CHANGE_ME"
+RECIPIENT_ALIASES=""
 DB="${HOME}/Library/Messages/chat.db"
 PENDING_DIR="/tmp/imessage-notify-pending"
 
@@ -24,6 +25,26 @@ sent_epoch="${1:?Usage: read.sh <sent_epoch> [timeout] [poll_interval] [req_id]}
 TIMEOUT="${2:-300}"
 POLL_INTERVAL="${3:-10}"
 REQ_ID="${4:-}"
+
+# Build SQL IN clause from RECIPIENT + RECIPIENT_ALIASES
+# Output: 'addr1','addr2',... (single-quoted, apostrophes escaped)
+build_recipient_sql() {
+    local addrs=("$RECIPIENT")
+    if [ -n "$RECIPIENT_ALIASES" ]; then
+        for alias in $RECIPIENT_ALIASES; do
+            addrs+=("$alias")
+        done
+    fi
+    local parts=()
+    for addr in "${addrs[@]}"; do
+        # Escape single quotes for SQL safety (double them)
+        local escaped
+        escaped="$(printf '%s' "$addr" | sed "s/'/''/g")"
+        parts+=("'${escaped}'")
+    done
+    local IFS=","
+    echo "${parts[*]}"
+}
 
 # Convert unix epoch to Apple Core Data timestamp (nanoseconds since 2001-01-01)
 apple_ts=$(( (sent_epoch - 978307200) * 1000000000 ))
@@ -69,12 +90,13 @@ elapsed=0
 while [ "$elapsed" -lt "$TIMEOUT" ]; do
     # Query all inbound messages after our sent timestamp
     # Returns: rowid|text (one per line)
+    recipient_sql="$(build_recipient_sql)"
     messages="$(sqlite3 "$DB" "
         SELECT m.ROWID, m.text
         FROM message m
         JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE c.chat_identifier = '${RECIPIENT}'
+        WHERE c.chat_identifier IN (${recipient_sql})
           AND m.date > ${apple_ts}
           AND m.is_from_me = 0
           AND m.text IS NOT NULL

@@ -213,3 +213,14 @@ def get_recipient(script_path):
         if line.startswith("RECIPIENT="):
             return line.split("=", 1)[1].strip('"')
     return None
+
+
+def get_aliases(script_path):
+    """Extract the RECIPIENT_ALIASES value from a script file (read.sh).
+
+    Returns the raw string value (space-separated addresses), or None if not found.
+    """
+    for line in script_path.read_text().splitlines():
+        if line.startswith("RECIPIENT_ALIASES="):
+            return line.split("=", 1)[1].strip('"')
+    return None

@@ -43,6 +43,7 @@ Usage:
   ./install.sh                          Interactive: prompts for phone number
   ./install.sh --phone +15551234567     Non-interactive: US phone number
   ./install.sh --phone user@icloud.com  Non-interactive: Apple ID email
+  ./install.sh --aliases "+15551234567 user@gmail.com"  Extra iMessage identities
   ./install.sh --help                   Print this help
 
 Accepted phone formats:
@@ -52,11 +53,17 @@ Accepted phone formats:
   555-123-4567      (without country code)
   5551234567        (digits only)
   user@icloud.com   (Apple ID email)
+
+Aliases:
+  If your phone replies from a different address than the one you send to
+  (e.g., you send to your email but replies come from your phone number),
+  add those alternate addresses with --aliases. Space-separated.
 USAGE
 }
 
 # ─── Parse flags ───
 PHONE=""
+ALIASES=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --phone)
@@ -65,6 +72,14 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       PHONE="$2"
+      shift 2
+      ;;
+    --aliases)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: --aliases requires a value (space-separated addresses)" >&2
+        exit 1
+      fi
+      ALIASES="$2"
       shift 2
       ;;
     --help|-h)
@@ -162,21 +177,32 @@ fi
 
 # ─── Step 2: Detect existing installation ───
 EXISTING_RECIPIENT=""
+EXISTING_ALIASES=""
 if [[ -f "${INSTALL_DIR}/send.sh" ]]; then
   EXISTING_RECIPIENT="$(grep '^RECIPIENT=' "${INSTALL_DIR}/send.sh" 2>/dev/null | head -1 | sed 's/RECIPIENT="//' | sed 's/"$//' || true)"
+fi
+if [[ -f "${INSTALL_DIR}/read.sh" ]]; then
+  EXISTING_ALIASES="$(grep '^RECIPIENT_ALIASES=' "${INSTALL_DIR}/read.sh" 2>/dev/null | head -1 | sed 's/RECIPIENT_ALIASES="//' | sed 's/"$//' || true)"
 fi
 
 if [[ -n "$EXISTING_RECIPIENT" && "$EXISTING_RECIPIENT" != "CHANGE_ME" ]]; then
   echo "Existing installation detected."
   echo "  Current RECIPIENT: ${EXISTING_RECIPIENT}"
+  if [[ -n "$EXISTING_ALIASES" ]]; then
+    echo "  Current ALIASES:   ${EXISTING_ALIASES}"
+  fi
 
   if [[ -z "$PHONE" ]]; then
     echo ""
     read -p "Keep current recipient? [Y/n] " keep_choice
     if [[ "$(echo "$keep_choice" | tr '[:upper:]' '[:lower:]')" == "n" ]]; then
       EXISTING_RECIPIENT=""
+      EXISTING_ALIASES=""
     else
       PHONE="$EXISTING_RECIPIENT"
+      if [[ -z "$ALIASES" && -n "$EXISTING_ALIASES" ]]; then
+        ALIASES="$EXISTING_ALIASES"
+      fi
       echo "  Keeping existing recipient."
     fi
   fi
@@ -238,6 +264,55 @@ fi
 echo "Recipient: ${PHONE}"
 echo ""
 
+# ─── Step 3b: Get aliases (additional iMessage identities) ───
+if [[ -z "$ALIASES" ]]; then
+  # Attempt auto-detection from chat.db (requires FDA, may fail)
+  detected_aliases=""
+  if [[ -r "${HOME}/Library/Messages/chat.db" ]]; then
+    # Query for other handles linked to the same person via person_centric_id (Ventura+)
+    detected_aliases="$(sqlite3 "${HOME}/Library/Messages/chat.db" "
+      SELECT DISTINCT h2.id
+      FROM handle h1
+      JOIN handle h2 ON h1.person_centric_id = h2.person_centric_id
+      WHERE h1.id = '${PHONE}'
+        AND h2.id != '${PHONE}'
+        AND h1.person_centric_id IS NOT NULL
+        AND h1.person_centric_id != '';
+    " 2>/dev/null | tr '\n' ' ' | sed 's/ $//' || true)"
+  fi
+
+  if [[ -n "$detected_aliases" ]]; then
+    echo "Auto-detected other iMessage identities linked to ${PHONE}:"
+    for alias in $detected_aliases; do
+      echo "  - ${alias}"
+    done
+    echo ""
+    read -p "Use these as reply aliases? [Y/n] " use_detected
+    if [[ "$(echo "$use_detected" | tr '[:upper:]' '[:lower:]')" != "n" ]]; then
+      ALIASES="$detected_aliases"
+    fi
+  fi
+
+  if [[ -z "$ALIASES" ]]; then
+    echo "When you reply from your phone, the reply may come from a different"
+    echo "iMessage address (e.g., your phone number instead of your email)."
+    echo ""
+    echo "Enter any additional iMessage addresses (space-separated), or press Enter to skip."
+    if [[ -n "$EXISTING_ALIASES" ]]; then
+      echo "  Previous aliases: ${EXISTING_ALIASES}"
+    fi
+    read -p "Aliases: " aliases_input
+    ALIASES="${aliases_input:-${EXISTING_ALIASES}}"
+  fi
+
+  if [[ -n "$ALIASES" ]]; then
+    echo "  Aliases: ${ALIASES}"
+  else
+    echo "  No aliases configured (reply must come from ${PHONE})."
+  fi
+  echo ""
+fi
+
 # ─── Step 4: Copy scripts ───
 echo "Installing scripts to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR"
@@ -257,7 +332,11 @@ echo "  ✓ Scripts made executable"
 # ─── Step 6: Configure RECIPIENT + permissions ───
 echo ""
 echo "Configuring recipient and permissions..."
-"${INSTALL_DIR}/whitelist_commands.sh" "$PHONE"
+if [[ -n "$ALIASES" ]]; then
+  "${INSTALL_DIR}/whitelist_commands.sh" "$PHONE" --aliases "$ALIASES"
+else
+  "${INSTALL_DIR}/whitelist_commands.sh" "$PHONE"
+fi
 
 # ─── Step 7: Write version stamp ───
 version="$(git -C "$SCRIPT_DIR" describe --tags --always 2>/dev/null || echo "unknown")"

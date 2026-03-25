@@ -14,7 +14,7 @@ import subprocess
 
 import pytest
 
-from conftest import SKILL_DIR, patch_send_sh, run_send
+from conftest import SKILL_DIR, get_aliases, patch_send_sh, run_send
 
 
 # =============================================================================
@@ -598,3 +598,123 @@ class TestIntegrationSend:
         )
         assert result.returncode == 0
         assert "REQ_ID=" in result.stdout
+
+
+# =============================================================================
+# read.sh — Recipient Aliases
+# =============================================================================
+
+
+class TestReadRecipientAliases:
+    """Verify RECIPIENT_ALIASES support in read.sh for multi-identity routing."""
+
+    def test_aliases_variable_exists(self):
+        """read.sh must declare RECIPIENT_ALIASES."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "RECIPIENT_ALIASES=" in content
+
+    def test_aliases_default_is_empty(self):
+        """RECIPIENT_ALIASES defaults to empty string in source."""
+        aliases = get_aliases(SKILL_DIR / "read.sh")
+        assert aliases == ""
+
+    def test_build_recipient_sql_single(self):
+        """With no aliases, build_recipient_sql returns IN ('recipient')."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "build_recipient_sql" in content
+
+        # Run the function in isolation with just a RECIPIENT
+        result = subprocess.run(
+            ["bash", "-c", (
+                'RECIPIENT="user@example.com"\n'
+                'RECIPIENT_ALIASES=""\n'
+                + _extract_function(content, "build_recipient_sql")
+                + "\nbuild_recipient_sql"
+            )],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        output = result.stdout.strip()
+        assert output == "'user@example.com'"
+
+    def test_build_recipient_sql_with_aliases(self):
+        """With aliases, build_recipient_sql returns IN ('addr','alias1','alias2')."""
+        content = (SKILL_DIR / "read.sh").read_text()
+
+        result = subprocess.run(
+            ["bash", "-c", (
+                'RECIPIENT="user@example.com"\n'
+                'RECIPIENT_ALIASES="+13522339160 noelnosse@gmail.com"\n'
+                + _extract_function(content, "build_recipient_sql")
+                + "\nbuild_recipient_sql"
+            )],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        output = result.stdout.strip()
+        assert output == "'user@example.com','+13522339160','noelnosse@gmail.com'"
+
+    def test_empty_aliases_backwards_compatible(self):
+        """Empty RECIPIENT_ALIASES produces same result as single recipient."""
+        content = (SKILL_DIR / "read.sh").read_text()
+
+        result = subprocess.run(
+            ["bash", "-c", (
+                'RECIPIENT="+13522339160"\n'
+                'RECIPIENT_ALIASES=""\n'
+                + _extract_function(content, "build_recipient_sql")
+                + "\nbuild_recipient_sql"
+            )],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        output = result.stdout.strip()
+        assert output == "'+13522339160'"
+
+    def test_sql_quoting_special_chars(self):
+        """Addresses with apostrophes are escaped for SQL safety."""
+        content = (SKILL_DIR / "read.sh").read_text()
+
+        result = subprocess.run(
+            ["bash", "-c", (
+                "RECIPIENT=\"o'brien@example.com\"\n"
+                'RECIPIENT_ALIASES=""\n'
+                + _extract_function(content, "build_recipient_sql")
+                + "\nbuild_recipient_sql"
+            )],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        output = result.stdout.strip()
+        # Single quotes inside SQL strings must be doubled
+        assert output == "'o''brien@example.com'"
+
+    def test_sql_in_clause_used_in_query(self):
+        """The SQL query uses IN (build_recipient_sql) not = RECIPIENT."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "chat_identifier IN" in content
+        assert "build_recipient_sql" in content
+
+
+def _extract_function(script_content, func_name):
+    """Extract a bash function definition from script content."""
+    lines = script_content.splitlines()
+    capturing = False
+    brace_depth = 0
+    result = []
+
+    for line in lines:
+        if not capturing and line.strip().startswith(f"{func_name}()"):
+            capturing = True
+
+        if capturing:
+            result.append(line)
+            brace_depth += line.count("{") - line.count("}")
+            if brace_depth == 0 and len(result) > 1:
+                break
+
+    return "\n".join(result)

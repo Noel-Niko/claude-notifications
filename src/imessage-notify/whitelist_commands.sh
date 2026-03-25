@@ -82,6 +82,23 @@ configure_recipient() {
   echo "  Updated: send.sh, read.sh"
 }
 
+# --- Helper: configure RECIPIENT_ALIASES in read.sh ---
+configure_aliases() {
+  local aliases="$1"
+  local read_file="${SKILL_DIR}/read.sh"
+
+  # Escape for sed (handle + and . in phone/email addresses)
+  local escaped
+  escaped="$(echo "$aliases" | sed 's/[&/\]/\\&/g')"
+
+  sed -i '' "s|^RECIPIENT_ALIASES=\".*\"|RECIPIENT_ALIASES=\"${escaped}\"|" "$read_file"
+
+  if [ -n "$aliases" ]; then
+    echo "  RECIPIENT_ALIASES updated to: ${aliases}"
+    echo "  Updated: read.sh"
+  fi
+}
+
 # --- Helper: inject permissions into a settings JSON file ---
 inject_permissions() {
   local settings_file="$1"
@@ -131,9 +148,30 @@ else:
 echo "Setting up iMessage notifications for Claude Code..."
 echo ""
 
+# --- Parse arguments ---
+POSITIONAL_RECIPIENT=""
+ALIASES_ARG=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --aliases)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --aliases requires a value (space-separated addresses)" >&2
+        exit 1
+      fi
+      ALIASES_ARG="$2"
+      shift 2
+      ;;
+    *)
+      POSITIONAL_RECIPIENT="$1"
+      shift
+      ;;
+  esac
+done
+
 # --- Step 0: Configure RECIPIENT if phone/email argument provided ---
-if [ $# -ge 1 ]; then
-  input="$1"
+if [ -n "$POSITIONAL_RECIPIENT" ]; then
+  input="$POSITIONAL_RECIPIENT"
 
   # Check if it looks like an email
   if [[ "$input" == *@* ]]; then
@@ -158,6 +196,12 @@ if [ $# -ge 1 ]; then
     echo "Configuring recipient (phone): ${recipient}"
     configure_recipient "$recipient"
   fi
+  echo ""
+fi
+
+# --- Step 0b: Configure RECIPIENT_ALIASES if --aliases provided ---
+if [ -n "$ALIASES_ARG" ]; then
+  configure_aliases "$ALIASES_ARG"
   echo ""
 fi
 

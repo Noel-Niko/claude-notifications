@@ -9,6 +9,7 @@ import json
 
 from conftest import (
     EXPECTED_PERMISSIONS,
+    get_aliases,
     get_recipient,
     read_settings,
     run_whitelist,
@@ -278,3 +279,97 @@ class TestCombinedSetup:
         global_ = read_settings(whitelist_sandbox["global_settings"])
         for perm in EXPECTED_PERMISSIONS:
             assert perm in global_["permissions"]["allow"]
+
+
+# =============================================================================
+# Alias Configuration
+# =============================================================================
+
+
+class TestAliasConfiguration:
+    """Verify --aliases flag configures RECIPIENT_ALIASES in read.sh."""
+
+    def test_aliases_set_in_read_sh(self, whitelist_sandbox):
+        run_whitelist(
+            whitelist_sandbox,
+            "user@example.com",
+            "--aliases",
+            "+13522339160 noelnosse@gmail.com",
+        )
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        assert "+13522339160" in aliases
+        assert "noelnosse@gmail.com" in aliases
+
+    def test_aliases_not_in_send_sh(self, whitelist_sandbox):
+        """send.sh should NOT have RECIPIENT_ALIASES — it sends to one address."""
+        run_whitelist(
+            whitelist_sandbox,
+            "user@example.com",
+            "--aliases",
+            "+13522339160",
+        )
+        content = whitelist_sandbox["send_sh"].read_text()
+        assert "RECIPIENT_ALIASES" not in content
+
+    def test_aliases_with_phone_and_email_mix(self, whitelist_sandbox):
+        run_whitelist(
+            whitelist_sandbox,
+            "+15551234567",
+            "--aliases",
+            "user@icloud.com nnosse@wgu.edu +13522339160",
+        )
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        assert "user@icloud.com" in aliases
+        assert "nnosse@wgu.edu" in aliases
+        assert "+13522339160" in aliases
+
+    def test_aliases_overwrite_previous(self, whitelist_sandbox):
+        run_whitelist(
+            whitelist_sandbox,
+            "user@example.com",
+            "--aliases",
+            "old@example.com",
+        )
+        assert "old@example.com" in get_aliases(whitelist_sandbox["read_sh"])
+
+        run_whitelist(
+            whitelist_sandbox,
+            "user@example.com",
+            "--aliases",
+            "new@example.com",
+        )
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        assert "new@example.com" in aliases
+        assert "old@example.com" not in aliases
+
+    def test_aliases_idempotent(self, whitelist_sandbox):
+        for _ in range(3):
+            run_whitelist(
+                whitelist_sandbox,
+                "user@example.com",
+                "--aliases",
+                "+13522339160",
+            )
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        # Should appear exactly once, not duplicated
+        assert aliases.count("+13522339160") == 1
+
+    def test_no_aliases_leaves_empty(self, whitelist_sandbox):
+        """Running without --aliases preserves the empty default."""
+        run_whitelist(whitelist_sandbox, "user@example.com")
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        assert aliases == ""
+
+    def test_recipient_and_aliases_together(self, whitelist_sandbox):
+        """Recipient and aliases are configured in one call."""
+        run_whitelist(
+            whitelist_sandbox,
+            "nnosse@wgu.edu",
+            "--aliases",
+            "+13522339160 noelnosse@gmail.com",
+        )
+        assert get_recipient(whitelist_sandbox["send_sh"]) == "nnosse@wgu.edu"
+        assert get_recipient(whitelist_sandbox["read_sh"]) == "nnosse@wgu.edu"
+        aliases = get_aliases(whitelist_sandbox["read_sh"])
+        assert "+13522339160" in aliases
+        assert "noelnosse@gmail.com" in aliases
