@@ -78,3 +78,16 @@ Pending requests are tracked in `/tmp/imessage-notify-pending/`. Atomic `mkdir`-
 ## Configuration
 
 The recipient iMessage address is set in `send.sh` and `read.sh` via the `RECIPIENT` variable. To change it, update both files.
+
+### Reply Aliases
+
+When you reply from your phone, the reply may come from a different iMessage identity (e.g., your phone number instead of your email). `read.sh` has a `RECIPIENT_ALIASES` variable that lists additional addresses to check for replies. The SQL query uses `IN (recipient, alias1, alias2, ...)` instead of matching a single address.
+
+Configure aliases via the installer or directly:
+```bash
+# Via whitelist_commands.sh:
+~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+
+# Or edit read.sh directly:
+RECIPIENT_ALIASES="+13522339160 noelnosse@gmail.com"
+```
