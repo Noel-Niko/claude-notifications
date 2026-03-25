@@ -94,7 +94,13 @@ def whitelist_sandbox(tmp_path, monkeypatch):
     skill.mkdir(parents=True)
 
     # Copy real scripts into sandbox skill dir
-    for script in ["send.sh", "read.sh", "notify.sh", "check_fda.sh", "check_imessage.sh"]:
+    for script in [
+        "send.sh",
+        "read.sh",
+        "notify.sh",
+        "check_fda.sh",
+        "check_imessage.sh",
+    ]:
         src = SKILL_DIR / script
         if src.exists():
             shutil.copy2(src, skill / script)

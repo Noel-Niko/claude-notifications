@@ -512,7 +512,14 @@ class TestScriptPermissions:
 
     @pytest.mark.parametrize(
         "script",
-        ["send.sh", "notify.sh", "read.sh", "check_fda.sh", "check_imessage.sh", "whitelist_commands.sh"],
+        [
+            "send.sh",
+            "notify.sh",
+            "read.sh",
+            "check_fda.sh",
+            "check_imessage.sh",
+            "whitelist_commands.sh",
+        ],
     )
     def test_script_is_executable(self, script):
         path = SKILL_DIR / script
