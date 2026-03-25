@@ -27,6 +27,7 @@ EXPECTED_PERMISSIONS = [
     "Bash(~/.claude/skills/imessage-notify/send.sh *)",
     "Bash(~/.claude/skills/imessage-notify/read.sh *)",
     "Bash(~/.claude/skills/imessage-notify/check_fda.sh)",
+    "Bash(~/.claude/skills/imessage-notify/check_imessage.sh)",
     "Bash(cat ~/.claude/skills/imessage-notify/*)",
     "Read(~/.claude/skills/imessage-notify/*)",
 ]
@@ -93,7 +94,7 @@ def whitelist_sandbox(tmp_path, monkeypatch):
     skill.mkdir(parents=True)
 
     # Copy real scripts into sandbox skill dir
-    for script in ["send.sh", "read.sh", "notify.sh", "check_fda.sh"]:
+    for script in ["send.sh", "read.sh", "notify.sh", "check_fda.sh", "check_imessage.sh"]:
         src = SKILL_DIR / script
         if src.exists():
             shutil.copy2(src, skill / script)
