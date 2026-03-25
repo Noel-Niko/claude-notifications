@@ -94,12 +94,22 @@ if [[ "$(uname)" != "Darwin" ]]; then
 fi
 echo "  ✓ macOS detected"
 
-# Messages.app check
-if [[ ! -d "/System/Applications/Messages.app" ]]; then
-  echo "ERROR: Messages.app not found at /System/Applications/Messages.app" >&2
+# Messages.app + iMessage activation check
+imessage_check_exit=0
+"${SRC_DIR}/check_imessage.sh" 2>/dev/null || imessage_check_exit=$?
+
+if [[ $imessage_check_exit -eq 1 ]]; then
+  echo "  ✗ Messages.app not found" >&2
+  echo "  Run: ${SRC_DIR}/check_imessage.sh for details." >&2
   exit 1
+elif [[ $imessage_check_exit -eq 2 ]]; then
+  echo "  ✓ Messages.app found"
+  echo "  ⚠ iMessage may not be activated. Installation will continue."
+  echo "    Run: ${SRC_DIR}/check_imessage.sh for setup instructions."
+elif [[ $imessage_check_exit -eq 0 ]]; then
+  echo "  ✓ Messages.app found"
+  echo "  ✓ iMessage is activated"
 fi
-echo "  ✓ Messages.app found"
 
 # sqlite3 check
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -278,13 +288,26 @@ echo "If you haven't already, open Messages.app and send yourself a test message
 
 # ─── Step 10: Verification test ───
 echo ""
-echo "Running verification test..."
-if "${INSTALL_DIR}/send.sh" "Installation test from claude-notifications" >/dev/null 2>&1; then
-  echo "  ✓ Test message sent successfully! Check your phone."
+if [[ $imessage_check_exit -eq 2 ]]; then
+  echo "Skipping verification test — iMessage is not activated."
+  echo ""
+  echo "  To complete setup:"
+  echo "  1. Open Messages.app > Settings > iMessage > Sign in with Apple ID"
+  echo "  2. Send yourself a test message to ${PHONE}"
+  echo "  3. Verify with: ${INSTALL_DIR}/send.sh \"Hello\""
+  echo "  4. Check status: ${INSTALL_DIR}/check_imessage.sh"
 else
-  echo "  ⚠ Verification test failed. Check that Messages.app is running and"
-  echo "  you have an existing conversation with ${PHONE}."
-  echo "  You can test manually: ${INSTALL_DIR}/send.sh \"Hello\""
+  echo "Running verification test..."
+  if "${INSTALL_DIR}/send.sh" "Installation test from claude-notifications" >/dev/null 2>&1; then
+    echo "  ✓ Test message sent successfully! Check your phone."
+  else
+    echo "  ⚠ Verification test failed. Possible causes:"
+    echo "    - iMessage is not activated (run: ${INSTALL_DIR}/check_imessage.sh)"
+    echo "    - Messages.app is not running"
+    echo "    - No existing conversation with ${PHONE}"
+    echo "    - Full Disk Access not granted (run: ${INSTALL_DIR}/check_fda.sh)"
+    echo "  You can test manually: ${INSTALL_DIR}/send.sh \"Hello\""
+  fi
 fi
 
 # ─── Step 11: Update ~/.claude/CLAUDE.md ───
@@ -372,6 +395,13 @@ echo ""
 
 # ─── Step 12: Offer interactive demo ───
 echo ""
+if [[ $imessage_check_exit -eq 2 ]]; then
+  echo "Skipping demo — iMessage is not activated."
+  echo "After activating iMessage, reinstall with: ./install.sh"
+  echo ""
+  exit 0
+fi
+
 read -p "Would you like to run a quick interactive demo? [y/N] " run_demo
 
 run_demo_lower="$(echo "$run_demo" | tr '[:upper:]' '[:lower:]')"

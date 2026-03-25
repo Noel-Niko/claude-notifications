@@ -16,6 +16,9 @@ PERMISSIONS=(
   'Bash(~/.claude/skills/imessage-notify/send.sh *)'
   'Bash(~/.claude/skills/imessage-notify/read.sh *)'
   'Bash(~/.claude/skills/imessage-notify/check_fda.sh)'
+  'Bash(~/.claude/skills/imessage-notify/check_imessage.sh)'
+  'Bash(cat ~/.claude/skills/imessage-notify/*)'
+  'Read(~/.claude/skills/imessage-notify/*)'
 )
 
 echo "Uninstalling claude-notifications..."
