@@ -625,12 +625,16 @@ class TestReadRecipientAliases:
 
         # Run the function in isolation with just a RECIPIENT
         result = subprocess.run(
-            ["bash", "-c", (
-                'RECIPIENT="user@example.com"\n'
-                'RECIPIENT_ALIASES=""\n'
-                + _extract_function(content, "build_recipient_sql")
-                + "\nbuild_recipient_sql"
-            )],
+            [
+                "bash",
+                "-c",
+                (
+                    'RECIPIENT="user@example.com"\n'
+                    'RECIPIENT_ALIASES=""\n'
+                    + _extract_function(content, "build_recipient_sql")
+                    + "\nbuild_recipient_sql"
+                ),
+            ],
             capture_output=True,
             text=True,
         )
@@ -643,12 +647,16 @@ class TestReadRecipientAliases:
         content = (SKILL_DIR / "read.sh").read_text()
 
         result = subprocess.run(
-            ["bash", "-c", (
-                'RECIPIENT="user@example.com"\n'
-                'RECIPIENT_ALIASES="+13522339160 noelnosse@gmail.com"\n'
-                + _extract_function(content, "build_recipient_sql")
-                + "\nbuild_recipient_sql"
-            )],
+            [
+                "bash",
+                "-c",
+                (
+                    'RECIPIENT="user@example.com"\n'
+                    'RECIPIENT_ALIASES="+13522339160 noelnosse@gmail.com"\n'
+                    + _extract_function(content, "build_recipient_sql")
+                    + "\nbuild_recipient_sql"
+                ),
+            ],
             capture_output=True,
             text=True,
         )
@@ -661,12 +669,16 @@ class TestReadRecipientAliases:
         content = (SKILL_DIR / "read.sh").read_text()
 
         result = subprocess.run(
-            ["bash", "-c", (
-                'RECIPIENT="+13522339160"\n'
-                'RECIPIENT_ALIASES=""\n'
-                + _extract_function(content, "build_recipient_sql")
-                + "\nbuild_recipient_sql"
-            )],
+            [
+                "bash",
+                "-c",
+                (
+                    'RECIPIENT="+13522339160"\n'
+                    'RECIPIENT_ALIASES=""\n'
+                    + _extract_function(content, "build_recipient_sql")
+                    + "\nbuild_recipient_sql"
+                ),
+            ],
             capture_output=True,
             text=True,
         )
@@ -679,12 +691,16 @@ class TestReadRecipientAliases:
         content = (SKILL_DIR / "read.sh").read_text()
 
         result = subprocess.run(
-            ["bash", "-c", (
-                "RECIPIENT=\"o'brien@example.com\"\n"
-                'RECIPIENT_ALIASES=""\n'
-                + _extract_function(content, "build_recipient_sql")
-                + "\nbuild_recipient_sql"
-            )],
+            [
+                "bash",
+                "-c",
+                (
+                    'RECIPIENT="o\'brien@example.com"\n'
+                    'RECIPIENT_ALIASES=""\n'
+                    + _extract_function(content, "build_recipient_sql")
+                    + "\nbuild_recipient_sql"
+                ),
+            ],
             capture_output=True,
             text=True,
         )
