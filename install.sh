@@ -297,7 +297,8 @@ if [[ -z "$ALIASES" ]]; then
     echo "When you reply from your phone, the reply may come from a different"
     echo "iMessage address (e.g., your phone number instead of your email)."
     echo ""
-    echo "Enter any additional iMessage addresses (space-separated), or press Enter to skip."
+    echo "STRONGLY RECOMMENDED: Enter any additional iMessage addresses such as the apple account email (space-separated) associated with the phone number,"
+    echo "or press Enter to skip."
     if [[ -n "$EXISTING_ALIASES" ]]; then
       echo "  Previous aliases: ${EXISTING_ALIASES}"
     fi
