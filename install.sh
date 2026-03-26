@@ -392,6 +392,28 @@ fi
 
 # ─── Step 11: Update ~/.claude/CLAUDE.md ───
 CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
+
+# ── 11a: Post-compact rule (prepend to top if missing) ──
+POST_COMPACT_MARKER="CRITICAL — POST-COMPACT RULE"
+POST_COMPACT_BLOCK='> **CRITICAL — POST-COMPACT RULE:** After every `/compact`, you MUST re-read this file (`~/.claude/CLAUDE.md`) in full using the Read tool **before** doing anything else. Do not rely on the compacted summary for these rules — the summary may omit or simplify critical constraints. Re-reading ensures no instructions are lost. This rule itself must be preserved in the compact summary so it triggers the re-read.'
+
+mkdir -p "$(dirname "$CLAUDE_MD")"
+
+if [[ -f "$CLAUDE_MD" ]] && grep -qF "$POST_COMPACT_MARKER" "$CLAUDE_MD"; then
+  echo "  ✓ ~/.claude/CLAUDE.md already contains post-compact rule"
+else
+  if [[ -f "$CLAUDE_MD" ]] && [[ -s "$CLAUDE_MD" ]]; then
+    # Prepend to existing file so the rule appears first
+    tmp_claude="$(mktemp)"
+    printf '%s\n\n' "$POST_COMPACT_BLOCK" | cat - "$CLAUDE_MD" > "$tmp_claude"
+    mv "$tmp_claude" "$CLAUDE_MD"
+  else
+    printf '%s\n' "$POST_COMPACT_BLOCK" > "$CLAUDE_MD"
+  fi
+  echo "  ✓ Post-compact rule prepended to ~/.claude/CLAUDE.md"
+fi
+
+# ── 11b: iMessage Notifications block (append if missing) ──
 MARKER="## iMessage Notifications (MANDATORY)"
 
 IMESSAGE_BLOCK='## iMessage Notifications (MANDATORY)
@@ -429,8 +451,6 @@ If the user mentions "iMessage", "phone", "away from computer", or "away from th
 **Setup:**
 - Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol on first use
 - If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh` and relay setup instructions'
-
-mkdir -p "$(dirname "$CLAUDE_MD")"
 
 if [[ -f "$CLAUDE_MD" ]] && grep -qF "$MARKER" "$CLAUDE_MD"; then
   echo "  ✓ ~/.claude/CLAUDE.md already contains iMessage Notifications block"

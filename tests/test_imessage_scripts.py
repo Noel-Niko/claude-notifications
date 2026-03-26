@@ -480,6 +480,125 @@ class TestReadReplyMatching:
 
 
 # =============================================================================
+# read.sh — is_from_me Self-Reply Fix
+# =============================================================================
+
+
+class TestReadIsFromMeFix:
+    """Verify read.sh handles self-replies where is_from_me = 1.
+
+    macOS iMessage marks ~6% of self-conversation replies as is_from_me = 1
+    instead of 0. The fix uses the Claude tag pattern [repo|REQ-xxx] to
+    distinguish Claude's outbound messages from user replies, rather than
+    relying solely on is_from_me.
+    """
+
+    def test_query_does_not_use_bare_is_from_me_zero(self):
+        """The SQL query must NOT have a bare 'is_from_me = 0' filter."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        # Should not have standalone is_from_me = 0 (without OR clause)
+        # The fix wraps it: (m.is_from_me = 0 OR m.text NOT LIKE ...)
+        assert "AND m.is_from_me = 0\n" not in content
+
+    def test_query_uses_or_clause_for_is_from_me(self):
+        """The SQL query includes OR clause to catch is_from_me=1 user replies."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "m.is_from_me = 0 OR m.text NOT LIKE" in content
+
+    def test_query_filters_claude_tagged_messages(self):
+        """The NOT LIKE pattern excludes Claude-tagged [repo|REQ-xxx] messages."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "NOT LIKE '[%|REQ-%]%'" in content
+
+    def test_is_from_me_zero_still_included(self):
+        """Messages with is_from_me=0 are always included (backward compat)."""
+        content = (SKILL_DIR / "read.sh").read_text()
+        assert "m.is_from_me = 0" in content
+
+    def test_tag_pattern_matches_send_format(self):
+        """The LIKE pattern must match the tag format from send.sh."""
+        send_content = (SKILL_DIR / "send.sh").read_text()
+        read_content = (SKILL_DIR / "read.sh").read_text()
+        # send.sh tags: [${repo_name}|REQ-${req_id}]
+        assert '[${repo_name}|REQ-${req_id}]' in send_content
+        # read.sh filters: NOT LIKE '[%|REQ-%]%'
+        assert "NOT LIKE '[%|REQ-%]%'" in read_content
+
+    def test_like_pattern_matches_tagged_messages(self):
+        """Verify the SQL LIKE pattern correctly matches tagged messages."""
+        # The LIKE pattern '[%|REQ-%]%' should match Claude-tagged messages
+        # Test with a real sqlite3 call
+        import subprocess
+
+        result = subprocess.run(
+            [
+                "sqlite3",
+                ":memory:",
+                (
+                    "SELECT "
+                    "  '[my-repo|REQ-a1b2c3d4] Hello' LIKE '[%|REQ-%]%' AS tagged_match,"
+                    "  'Yes I approve' LIKE '[%|REQ-%]%' AS plain_no_match,"
+                    "  'Regarding mapping, we must...' LIKE '[%|REQ-%]%' AS reply_no_match;"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        # tagged_match=1, plain_no_match=0, reply_no_match=0
+        assert result.stdout.strip() == "1|0|0"
+
+    def test_like_pattern_excludes_only_tagged(self):
+        """NOT LIKE filter passes user replies, blocks Claude sends."""
+        import subprocess
+
+        result = subprocess.run(
+            [
+                "sqlite3",
+                ":memory:",
+                (
+                    "SELECT "
+                    "  '[repo|REQ-deadbeef] Plan ready' NOT LIKE '[%|REQ-%]%' AS claude_msg,"
+                    "  'approved' NOT LIKE '[%|REQ-%]%' AS user_reply,"
+                    "  'REQ-deadbeef yes' NOT LIKE '[%|REQ-%]%' AS id_reply;"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        # claude_msg=0 (filtered out), user_reply=1 (passes), id_reply=1 (passes)
+        assert result.stdout.strip() == "0|1|1"
+
+    def test_combined_filter_logic_with_sqlite(self):
+        """End-to-end: the combined (is_from_me=0 OR NOT LIKE) filter works."""
+        import subprocess
+
+        sql = """
+        CREATE TABLE test_msgs (text TEXT, is_from_me INTEGER);
+        INSERT INTO test_msgs VALUES ('[repo|REQ-abc12345] What do you think?', 1);
+        INSERT INTO test_msgs VALUES ('Yes I approve', 0);
+        INSERT INTO test_msgs VALUES ('Regarding mapping, we must map by text', 1);
+        INSERT INTO test_msgs VALUES ('[repo|REQ-def67890] Here is the plan', 1);
+        INSERT INTO test_msgs VALUES ('Looks good', 0);
+        SELECT text FROM test_msgs
+        WHERE (is_from_me = 0 OR text NOT LIKE '[%|REQ-%]%')
+        ORDER BY ROWID;
+        """
+        result = subprocess.run(
+            ["sqlite3", ":memory:", sql],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        rows = result.stdout.strip().split("\n")
+        assert len(rows) == 3
+        assert rows[0] == "Yes I approve"
+        assert rows[1] == "Regarding mapping, we must map by text"
+        assert rows[2] == "Looks good"
+
+
+# =============================================================================
 # read.sh — Apple Timestamp Conversion
 # =============================================================================
 
