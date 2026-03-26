@@ -98,7 +98,7 @@ while [ "$elapsed" -lt "$TIMEOUT" ]; do
         JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE c.chat_identifier IN (${recipient_sql})
           AND m.date > ${apple_ts}
-          AND m.is_from_me = 0
+          AND (m.is_from_me = 0 OR m.text NOT LIKE '[%|REQ-%]%')
           AND m.text IS NOT NULL
           AND m.text != ''
         ORDER BY m.date ASC;
