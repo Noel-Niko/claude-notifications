@@ -520,7 +520,7 @@ class TestReadIsFromMeFix:
         send_content = (SKILL_DIR / "send.sh").read_text()
         read_content = (SKILL_DIR / "read.sh").read_text()
         # send.sh tags: [${repo_name}|REQ-${req_id}]
-        assert '[${repo_name}|REQ-${req_id}]' in send_content
+        assert "[${repo_name}|REQ-${req_id}]" in send_content
         # read.sh filters: NOT LIKE '[%|REQ-%]%'
         assert "NOT LIKE '[%|REQ-%]%'" in read_content
 

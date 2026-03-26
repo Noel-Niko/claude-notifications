@@ -145,7 +145,7 @@ class TestPostCompactPrepend:
         lines = content.splitlines()
         # Find the blank line between the rule and existing content
         rule_line_idx = next(
-            i for i, l in enumerate(lines) if POST_COMPACT_MARKER in l
+            i for i, line in enumerate(lines) if POST_COMPACT_MARKER in line
         )
         # There should be a blank line after the rule before existing content
         assert lines[rule_line_idx + 1] == ""
