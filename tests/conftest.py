@@ -223,9 +223,7 @@ def uninstall_sandbox(tmp_path, monkeypatch):
 
     # Global settings with tilde + absolute permissions + other entries
     global_settings = home / ".claude" / "settings.json"
-    all_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(
-        str(home)
-    )
+    all_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(str(home))
     global_settings.write_text(
         json.dumps(
             {
@@ -267,9 +265,7 @@ def uninstall_sandbox(tmp_path, monkeypatch):
     # Local settings in parent repo (for --all flag)
     local_settings = parent_repo / ".claude" / "settings.local.json"
     local_settings.parent.mkdir(parents=True, exist_ok=True)
-    local_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(
-        str(home)
-    )
+    local_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(str(home))
     local_settings.write_text(
         json.dumps(
             {"permissions": {"allow": local_perms + ["Bash(npm test)"]}},

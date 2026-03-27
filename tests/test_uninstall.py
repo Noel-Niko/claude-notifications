@@ -67,9 +67,7 @@ class TestGlobalPermissionCleanup:
 
     def test_no_permissions_section(self, uninstall_sandbox):
         """Settings file with no permissions key should not cause an error."""
-        uninstall_sandbox["global_settings"].write_text(
-            json.dumps({"env": {"A": "B"}})
-        )
+        uninstall_sandbox["global_settings"].write_text(json.dumps({"env": {"A": "B"}}))
         run_uninstall(uninstall_sandbox)
 
 
@@ -143,8 +141,7 @@ class TestGitignoreCleanup:
     def test_empty_gitignore_deleted(self, uninstall_sandbox):
         """Gitignore with only notification entry should be deleted."""
         uninstall_sandbox["parent_gitignore"].write_text(
-            "# Claude notifications (cloned installer)\n"
-            "claude-notifications/\n"
+            "# Claude notifications (cloned installer)\nclaude-notifications/\n"
         )
         run_uninstall(uninstall_sandbox)
         assert not uninstall_sandbox["parent_gitignore"].exists()
