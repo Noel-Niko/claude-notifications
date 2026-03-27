@@ -23,15 +23,25 @@ set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Permission patterns to inject
+# Permission patterns to inject (tilde form + absolute form for sub-agent compat)
+TILDE_SKILL="~/.claude/skills/imessage-notify"
+ABS_SKILL="${HOME}/.claude/skills/imessage-notify"
+
 PERMISSIONS=(
-  'Bash(~/.claude/skills/imessage-notify/notify.sh *)'
-  'Bash(~/.claude/skills/imessage-notify/send.sh *)'
-  'Bash(~/.claude/skills/imessage-notify/read.sh *)'
-  'Bash(~/.claude/skills/imessage-notify/check_fda.sh)'
-  'Bash(~/.claude/skills/imessage-notify/check_imessage.sh)'
-  'Bash(cat ~/.claude/skills/imessage-notify/*)'
-  'Read(~/.claude/skills/imessage-notify/*)'
+  "Bash(${TILDE_SKILL}/notify.sh *)"
+  "Bash(${TILDE_SKILL}/send.sh *)"
+  "Bash(${TILDE_SKILL}/read.sh *)"
+  "Bash(${TILDE_SKILL}/check_fda.sh)"
+  "Bash(${TILDE_SKILL}/check_imessage.sh)"
+  "Bash(cat ${TILDE_SKILL}/*)"
+  "Read(${TILDE_SKILL}/*)"
+  "Bash(${ABS_SKILL}/notify.sh *)"
+  "Bash(${ABS_SKILL}/send.sh *)"
+  "Bash(${ABS_SKILL}/read.sh *)"
+  "Bash(${ABS_SKILL}/check_fda.sh)"
+  "Bash(${ABS_SKILL}/check_imessage.sh)"
+  "Bash(cat ${ABS_SKILL}/*)"
+  "Read(${ABS_SKILL}/*)"
 )
 
 # --- Helper: normalize phone number to +1XXXXXXXXXX ---

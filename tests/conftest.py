@@ -2,10 +2,12 @@
 
 Defines:
 - SKILL_DIR: Path to source scripts in src/imessage-notify/
-- EXPECTED_PERMISSIONS: The 4 permission strings the installer injects
+- EXPECTED_PERMISSIONS: The 7 permission strings the installer injects
 - script_sandbox: Isolated sandbox for send.sh/notify.sh/read.sh tests
 - whitelist_sandbox: Isolated sandbox for whitelist_commands.sh tests
-- Shared helpers: run_send(), run_whitelist(), read_settings(), get_recipient(), patch_send_sh()
+- uninstall_sandbox: Isolated sandbox for uninstall.sh tests
+- Shared helpers: run_send(), run_whitelist(), run_uninstall(),
+  read_settings(), get_recipient(), patch_send_sh()
 """
 
 import json
@@ -31,6 +33,77 @@ EXPECTED_PERMISSIONS = [
     "Bash(cat ~/.claude/skills/imessage-notify/*)",
     "Read(~/.claude/skills/imessage-notify/*)",
 ]
+
+
+def expected_absolute_permissions(home_dir):
+    """Generate expected absolute-path permission patterns for a given HOME.
+
+    Sub-agents may not resolve ~ correctly, so absolute paths are injected
+    alongside the tilde versions as defense-in-depth.
+    """
+    skill = f"{home_dir}/.claude/skills/imessage-notify"
+    return [
+        f"Bash({skill}/notify.sh *)",
+        f"Bash({skill}/send.sh *)",
+        f"Bash({skill}/read.sh *)",
+        f"Bash({skill}/check_fda.sh)",
+        f"Bash({skill}/check_imessage.sh)",
+        f"Bash(cat {skill}/*)",
+        f"Read({skill}/*)",
+    ]
+
+
+# Path to the repo's uninstall.sh
+UNINSTALL_SCRIPT = Path(__file__).parent.parent / "uninstall.sh"
+
+# Markers used by install.sh in CLAUDE.md
+POST_COMPACT_MARKER = "CRITICAL — POST-COMPACT RULE"
+IMESSAGE_MARKER = "## iMessage Notifications (MANDATORY)"
+
+# Sample CLAUDE.md with user content + both installer blocks
+SAMPLE_CLAUDE_MD = """\
+> **CRITICAL — POST-COMPACT RULE:** After every `/compact`, you MUST re-read \
+this file (`~/.claude/CLAUDE.md`) in full using the Read tool **before** doing \
+anything else. Do not rely on the compacted summary for these rules — the \
+summary may omit or simplify critical constraints. Re-reading ensures no \
+instructions are lost. This rule itself must be preserved in the compact \
+summary so it triggers the re-read.
+
+# CLAUDE.md
+
+## Code Style & Practices
+- Always follow SOLID principles, clean code, and DRY practices.
+- Use TDD as the development pattern.
+
+## Workflow
+- Do not commit code. Leave all commits to the user.
+
+## iMessage Notifications (MANDATORY)
+
+**Two modes:** IDE mode (default) and Phone mode.
+
+**Automatic phone mode triggers — no confirmation needed:**
+If the user mentions "iMessage", "phone", "away from computer", \
+**immediately switch to phone mode**.
+
+**Setup:**
+- Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol
+- If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh`
+"""
+
+# CLAUDE.md with only installer blocks (file should be deleted after cleanup)
+SAMPLE_CLAUDE_MD_INSTALLER_ONLY = """\
+> **CRITICAL — POST-COMPACT RULE:** After every `/compact`, you MUST re-read \
+this file (`~/.claude/CLAUDE.md`) in full using the Read tool **before** doing \
+anything else.
+
+## iMessage Notifications (MANDATORY)
+
+**Two modes:** IDE mode (default) and Phone mode.
+
+**Setup:**
+- Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol
+"""
 
 
 # =============================================================================
@@ -122,6 +195,105 @@ def whitelist_sandbox(tmp_path, monkeypatch):
         "local_settings": repo / ".claude" / "settings.local.json",
         "send_sh": skill / "send.sh",
         "read_sh": skill / "read.sh",
+    }
+
+
+@pytest.fixture()
+def uninstall_sandbox(tmp_path, monkeypatch):
+    """Isolated sandbox for uninstall.sh tests.
+
+    Creates a fully installed environment matching what install.sh produces:
+    - Fake HOME with skill dir, global settings, CLAUDE.md
+    - Parent git repo with .gitignore containing claude-notifications/ entry
+    - Clone dir with uninstall.sh
+    - Runtime pending dir
+    - Per-repo local settings in parent repo
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+
+    # Installed skill directory
+    skill = home / ".claude" / "skills" / "imessage-notify"
+    skill.mkdir(parents=True)
+    for script in SKILL_DIR.glob("*.sh"):
+        shutil.copy2(script, skill / script.name)
+    for md_file in SKILL_DIR.glob("*.md"):
+        shutil.copy2(md_file, skill / md_file.name)
+    (skill / ".version").write_text("v1.0.0-test\n")
+
+    # Global settings with tilde + absolute permissions + other entries
+    global_settings = home / ".claude" / "settings.json"
+    all_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(str(home))
+    global_settings.write_text(
+        json.dumps(
+            {
+                "env": {"SOME_VAR": "preserved"},
+                "permissions": {"allow": all_perms + ["Bash(git status)"]},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+    # CLAUDE.md with both installer blocks + user content
+    claude_md = home / ".claude" / "CLAUDE.md"
+    claude_md.write_text(SAMPLE_CLAUDE_MD)
+
+    # Parent git repo
+    parent_repo = tmp_path / "parent-repo"
+    parent_repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(parent_repo)], check=True)
+
+    # Clone dir inside parent repo
+    clone_dir = parent_repo / "claude-notifications"
+    clone_dir.mkdir()
+
+    # Copy uninstall.sh into clone dir
+    shutil.copy2(UNINSTALL_SCRIPT, clone_dir / "uninstall.sh")
+    (clone_dir / "uninstall.sh").chmod(0o755)
+
+    # Parent .gitignore with notification entry + other entries
+    parent_gitignore = parent_repo / ".gitignore"
+    parent_gitignore.write_text(
+        "node_modules/\n"
+        "*.pyc\n"
+        "\n"
+        "# Claude notifications (cloned installer)\n"
+        "claude-notifications/\n"
+    )
+
+    # Local settings in parent repo (for --all flag)
+    local_settings = parent_repo / ".claude" / "settings.local.json"
+    local_settings.parent.mkdir(parents=True, exist_ok=True)
+    local_perms = list(EXPECTED_PERMISSIONS) + expected_absolute_permissions(str(home))
+    local_settings.write_text(
+        json.dumps(
+            {"permissions": {"allow": local_perms + ["Bash(npm test)"]}},
+            indent=2,
+        )
+        + "\n"
+    )
+
+    # Runtime pending dir with content
+    pending = tmp_path / "pending"
+    pending.mkdir()
+    req_dir = pending / "REQ-abc123"
+    req_dir.mkdir()
+    (req_dir / "claim").write_text("claimed")
+
+    monkeypatch.setenv("HOME", str(home))
+
+    return {
+        "home": home,
+        "skill": skill,
+        "global_settings": global_settings,
+        "claude_md": claude_md,
+        "parent_repo": parent_repo,
+        "clone_dir": clone_dir,
+        "script": clone_dir / "uninstall.sh",
+        "parent_gitignore": parent_gitignore,
+        "local_settings": local_settings,
+        "pending": pending,
     }
 
 
@@ -224,3 +396,25 @@ def get_aliases(script_path):
         if line.startswith("RECIPIENT_ALIASES="):
             return line.split("=", 1)[1].strip('"')
     return None
+
+
+def run_uninstall(sandbox, *args, expect_fail=False):
+    """Run uninstall.sh in the sandbox clone dir."""
+    env = {
+        **os.environ,
+        "HOME": str(sandbox["home"]),
+        "PENDING_DIR": str(sandbox["pending"]),
+    }
+    result = subprocess.run(
+        [str(sandbox["script"]), *args],
+        capture_output=True,
+        text=True,
+        cwd=str(sandbox["clone_dir"]),
+        env=env,
+    )
+    if not expect_fail:
+        assert result.returncode == 0, (
+            f"Script failed (exit {result.returncode}):\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+    return result

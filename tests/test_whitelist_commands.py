@@ -9,6 +9,7 @@ import json
 
 from conftest import (
     EXPECTED_PERMISSIONS,
+    expected_absolute_permissions,
     get_aliases,
     get_recipient,
     read_settings,
@@ -373,3 +374,63 @@ class TestAliasConfiguration:
         aliases = get_aliases(whitelist_sandbox["read_sh"])
         assert "+13522339160" in aliases
         assert "noelnosse@gmail.com" in aliases
+
+
+# =============================================================================
+# Absolute Path Permissions (Option B — sub-agent defense-in-depth)
+# =============================================================================
+
+
+class TestAbsolutePathPermissions:
+    """Verify absolute-path permission variants are injected alongside tilde versions.
+
+    Sub-agents may not resolve ~ correctly, so whitelist_commands.sh must inject
+    both ~/.claude/... and $HOME/.claude/... permission patterns.
+    """
+
+    def test_local_settings_has_absolute_permissions(self, whitelist_sandbox):
+        run_whitelist(whitelist_sandbox)
+        settings = read_settings(whitelist_sandbox["local_settings"])
+        abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
+        for perm in abs_perms:
+            assert perm in settings["permissions"]["allow"], (
+                f"Missing absolute-path permission: {perm}"
+            )
+
+    def test_global_settings_has_absolute_permissions(self, whitelist_sandbox):
+        run_whitelist(whitelist_sandbox)
+        settings = read_settings(whitelist_sandbox["global_settings"])
+        abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
+        for perm in abs_perms:
+            assert perm in settings["permissions"]["allow"], (
+                f"Missing absolute-path permission: {perm}"
+            )
+
+    def test_both_tilde_and_absolute_present(self, whitelist_sandbox):
+        """Both tilde and absolute versions coexist in the allow list."""
+        run_whitelist(whitelist_sandbox)
+        settings = read_settings(whitelist_sandbox["local_settings"])
+        allow = settings["permissions"]["allow"]
+        abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
+        for tilde_perm, abs_perm in zip(EXPECTED_PERMISSIONS, abs_perms):
+            assert tilde_perm in allow, f"Missing tilde permission: {tilde_perm}"
+            assert abs_perm in allow, f"Missing absolute permission: {abs_perm}"
+
+    def test_absolute_permissions_not_duplicated(self, whitelist_sandbox):
+        """Running multiple times does not duplicate absolute-path entries."""
+        run_whitelist(whitelist_sandbox)
+        run_whitelist(whitelist_sandbox)
+        run_whitelist(whitelist_sandbox)
+        settings = read_settings(whitelist_sandbox["local_settings"])
+        allow = settings["permissions"]["allow"]
+        abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
+        for perm in abs_perms:
+            assert allow.count(perm) == 1, f"Duplicate absolute entry: {perm}"
+
+    def test_absolute_paths_use_real_home(self, whitelist_sandbox):
+        """Absolute paths use $HOME, not a literal tilde."""
+        run_whitelist(whitelist_sandbox)
+        abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
+        for perm in abs_perms:
+            assert "~" not in perm, f"Absolute perm should not contain tilde: {perm}"
+            assert str(whitelist_sandbox["home"]) in perm

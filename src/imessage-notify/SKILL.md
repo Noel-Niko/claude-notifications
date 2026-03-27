@@ -94,6 +94,33 @@ Messages are auto-tagged with the repo name and request ID:
 ~/.claude/skills/imessage-notify/read.sh <sent_epoch> [timeout_seconds] [poll_interval_seconds] [req_id]
 ```
 
+## Background Execution (IMPORTANT)
+
+**Always use `Bash(run_in_background=true)` for notify.sh — NEVER spawn a Task sub-agent.**
+
+`notify.sh` blocks while polling for a reply (up to 10 minutes). To keep working while waiting, use the Bash tool's `run_in_background` parameter. This runs the command in the **same session** and inherits all permissions.
+
+**Correct — background Bash:**
+```
+Bash(~/.claude/skills/imessage-notify/notify.sh "Deploy? YES/NO" 600 10, run_in_background=true)
+# Continue working...
+# Later, check for the reply:
+TaskOutput(task_id=<id>, block=false)
+```
+
+**WRONG — Task sub-agent:**
+```
+# DO NOT DO THIS — sub-agents have separate permission contexts and will fail:
+Task(subagent_type=Bash, prompt="run notify.sh ...", run_in_background=true)
+```
+
+Sub-agents (Task tool) run as separate Claude instances with their own permission context. Even with allowlisted commands in `settings.json`, sub-agents may fail to resolve `~` in permission patterns or may lack session-scoped approvals. `Bash(run_in_background)` avoids this entirely.
+
+**When to use which:**
+- `send.sh` — Run in foreground (fast, fire-and-forget)
+- `notify.sh` — Run in background via `Bash(run_in_background=true)`, check result later
+- Never use `Task` sub-agents to run these scripts
+
 ## Multi-Repo / Multi-Session Support
 
 Multiple Claude Code sessions can use this skill simultaneously without cross-talk.
@@ -171,6 +198,7 @@ reply=$(~/.claude/skills/imessage-notify/notify.sh "Deploy to staging? YES or NO
 # WRONG: Using notify.sh in IDE mode for approvals
 # WRONG: Using heredoc/multiline echo to pipe into notify.sh (triggers permission prompts)
 # WRONG: Asking "Want to switch to phone mode?" when user already said "use iMessage"
+# WRONG: Using Task sub-agents to run send.sh/notify.sh (permissions fail in sub-agents)
 ```
 
 ## Requirements
