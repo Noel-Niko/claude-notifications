@@ -33,6 +33,24 @@ EXPECTED_PERMISSIONS = [
 ]
 
 
+def expected_absolute_permissions(home_dir):
+    """Generate expected absolute-path permission patterns for a given HOME.
+
+    Sub-agents may not resolve ~ correctly, so absolute paths are injected
+    alongside the tilde versions as defense-in-depth.
+    """
+    skill = f"{home_dir}/.claude/skills/imessage-notify"
+    return [
+        f"Bash({skill}/notify.sh *)",
+        f"Bash({skill}/send.sh *)",
+        f"Bash({skill}/read.sh *)",
+        f"Bash({skill}/check_fda.sh)",
+        f"Bash({skill}/check_imessage.sh)",
+        f"Bash(cat {skill}/*)",
+        f"Read({skill}/*)",
+    ]
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
