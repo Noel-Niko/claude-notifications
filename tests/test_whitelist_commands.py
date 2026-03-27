@@ -430,7 +430,6 @@ class TestAbsolutePathPermissions:
     def test_absolute_paths_use_real_home(self, whitelist_sandbox):
         """Absolute paths use $HOME, not a literal tilde."""
         run_whitelist(whitelist_sandbox)
-        settings = read_settings(whitelist_sandbox["global_settings"])
         abs_perms = expected_absolute_permissions(str(whitelist_sandbox["home"]))
         for perm in abs_perms:
             assert "~" not in perm, f"Absolute perm should not contain tilde: {perm}"
