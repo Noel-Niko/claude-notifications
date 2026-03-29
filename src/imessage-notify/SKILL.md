@@ -1,3 +1,9 @@
+> **FIRST USE GATE:** Before producing ANY output in this session, read this
+> entire file. Do not respond to the user. Do not begin working. Do not
+> produce IDE output. Finish reading first. This file governs how you
+> communicate with the user. Skipping it means you will use the wrong output
+> channel and the user will not see your work.
+
 # iMessage Notification Skill
 
 Send iMessages to the user's phone and read their replies. Use this for approvals and notifications with dynamic mode-switching between IDE and phone.
@@ -5,16 +11,17 @@ Send iMessages to the user's phone and read their replies. Use this for approval
 ## Quick Decision Tree
 
 ```
-User mentions "iMessage" / "phone" / "away from computer"?
+User triggers phone mode? (keywords OR contextual signals — see below)
 └─ YES → Switch to phone mode immediately (no confirmation)
 
 In IDE mode? (default)
 ├─ Use AskUserQuestion / ExitPlanMode for approvals
 └─ Use send.sh for optional fire-and-forget status updates
 
-In Phone mode?
+In Phone mode? (IDE is NOT a communication channel)
 ├─ Use notify.sh for ALL approvals
 ├─ Use send.sh for fire-and-forget status updates
+├─ IDE text: only brief trace lines ("Sent via iMessage.", "Running tests.")
 └─ Check each reply for "switch to IDE"
 
 Status update (no reply needed)?
@@ -26,7 +33,24 @@ Status update (no reply needed)?
 **Two modes:** IDE mode (default) and Phone mode.
 
 **Automatic phone mode triggers — no confirmation needed:**
-If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, **immediately switch to phone mode**. Do not ask. Do not offer. Just switch.
+
+Switch to phone mode immediately (no confirmation, no offer) if ANY of these
+are true:
+
+**Keyword triggers** — the user's message contains any of:
+- "iMessage", "phone", "away from computer", "away from the compute"
+- "switch to iMessage", "use iMessage", "text me", "message me"
+
+**Contextual triggers** — the user's message contains:
+- Terminal output from `install.sh` or `whitelist_commands.sh` (the user
+  just set up iMessage notifications — they expect phone mode)
+- A phone demo reply (e.g., the user replied to a test message from their
+  phone, proving they are actively on their phone)
+- References to the iMessage notification system being configured or tested
+
+**Intent rule**: If the user's actions demonstrate they are on their phone or
+expect phone communication, switch to phone mode. Do not require exact keyword
+matches when contextual evidence is clear.
 
 **Manual switches:**
 - User says "switch to iMessage" → phone mode immediately
@@ -39,13 +63,34 @@ If the user mentions "iMessage", "phone", "away from computer", or "away from th
 - Optionally use `send.sh` for fire-and-forget status updates
 
 **Phone mode behavior:**
-- Use ONLY `notify.sh` for approvals (DO NOT show IDE prompts)
-- Use `send.sh` for fire-and-forget status updates
-- Check every reply for "switch to IDE" command
-- If detected, switch back to IDE mode and confirm
-- Include full context in messages (the user only sees their phone)
 
-**CRITICAL: NEVER use both IDE approvals and notify.sh simultaneously for the same approval. Pick ONE based on current mode.**
+In phone mode, the IDE is not a communication channel. The user is not
+looking at it. All substantive output goes through iMessage only.
+
+- Use ONLY `notify.sh` for approvals — NEVER show IDE prompts
+- Use `send.sh` for fire-and-forget status updates
+- NEVER use both IDE approvals and `notify.sh` for the same approval
+- Check every reply for "switch to IDE" command
+- If detected, switch back to IDE mode and confirm via IDE
+- Include full context in iMessages (the user only sees their phone)
+
+**IDE output rules (phone mode):**
+- The ONLY text that should appear in the IDE is brief operational trace
+  lines: "Sent via iMessage.", "Running tests.", "Waiting for reply."
+- Do NOT write markdown tables, bullet lists, summaries, or reports to
+  the IDE while in phone mode.
+- Do NOT duplicate iMessage content in the IDE. If you sent it via
+  `send.sh` or `notify.sh`, do not also render it as IDE text.
+- On step completion: send the result via `send.sh` only. IDE trace:
+  "Sent update via iMessage."
+- On approval needed: use `notify.sh` only. IDE trace: "Waiting for
+  reply on phone."
+
+**On mode-switch reminder:**
+If the user reminds you to use iMessage protocol:
+- From the next response onward, apply all IDE output rules above.
+- Send acknowledgment via `send.sh` (not IDE text).
+- Do not simply confirm the reminder and continue writing to the IDE.
 
 ## Scripts
 
