@@ -5,7 +5,8 @@
 #   1. (Optional) Configures the RECIPIENT phone number or email in send.sh and read.sh
 #   2. Adds wildcard permission entries to the current repo's .claude/settings.local.json
 #   3. Adds wildcard permission entries to the global ~/.claude/settings.json
-#   4. Ensures all skill scripts are executable
+#   4. Injects PermissionRequest/SessionEnd hooks into global settings
+#   5. Ensures all skill scripts are executable
 #
 # Usage:
 #   cd /path/to/your/repo
@@ -151,6 +152,100 @@ else:
 " "$settings_file" "${PERMISSIONS[@]}"
 }
 
+# --- Helper: inject hooks into a settings JSON file ---
+inject_hooks() {
+  local settings_file="$1"
+  local gate_cmd="$2"
+
+  python3 -c "
+import json, os, sys
+
+settings_file = sys.argv[1]
+gate_cmd = sys.argv[2]
+
+# Read existing settings or start fresh
+if os.path.exists(settings_file):
+    with open(settings_file, 'r') as f:
+        settings = json.load(f)
+else:
+    os.makedirs(os.path.dirname(settings_file), exist_ok=True)
+    settings = {}
+
+if 'hooks' not in settings:
+    settings['hooks'] = {}
+
+hooks = settings['hooks']
+changed = False
+
+# PermissionRequest hook
+perm_hook = {
+    'hooks': [{
+        'type': 'command',
+        'command': gate_cmd,
+        'timeout': 600,
+    }]
+}
+if 'PermissionRequest' not in hooks:
+    hooks['PermissionRequest'] = [perm_hook]
+    changed = True
+else:
+    # Check if our hook command is already present
+    existing_cmds = [
+        h.get('command', '')
+        for entry in hooks['PermissionRequest']
+        for h in entry.get('hooks', [])
+    ]
+    if gate_cmd not in existing_cmds:
+        hooks['PermissionRequest'].append(perm_hook)
+        changed = True
+
+# SessionEnd cleanup hook
+cleanup_cmd = 'rm -f /tmp/imessage-notify-phone-mode'
+cleanup_hook = {
+    'hooks': [{
+        'type': 'command',
+        'command': cleanup_cmd,
+        'timeout': 5,
+    }]
+}
+if 'SessionEnd' not in hooks:
+    hooks['SessionEnd'] = [cleanup_hook]
+    changed = True
+else:
+    existing_cmds = [
+        h.get('command', '')
+        for entry in hooks['SessionEnd']
+        for h in entry.get('hooks', [])
+    ]
+    if cleanup_cmd not in existing_cmds:
+        hooks['SessionEnd'].append(cleanup_hook)
+        changed = True
+
+# Remove stale SessionStart hook if present (race condition with phone mode flag)
+if 'SessionStart' in hooks:
+    before = len(hooks['SessionStart'])
+    hooks['SessionStart'] = [
+        entry for entry in hooks['SessionStart']
+        if not any(
+            h.get('command', '') == cleanup_cmd
+            for h in entry.get('hooks', [])
+        )
+    ]
+    if not hooks['SessionStart']:
+        del hooks['SessionStart']
+    if len(hooks.get('SessionStart', [])) < before:
+        changed = True
+
+if changed:
+    with open(settings_file, 'w') as f:
+        json.dump(settings, f, indent=2)
+        f.write('\n')
+    print('  ✓ Hooks configured (PermissionRequest, SessionEnd)')
+else:
+    print('  (hooks already configured)')
+" "$settings_file" "$gate_cmd"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -231,7 +326,12 @@ echo "Global settings: ${global_settings}"
 inject_permissions "$global_settings"
 echo ""
 
-# --- Step 3: Ensure scripts are executable ---
+# --- Step 3: Inject hooks into global settings ---
+echo "Hooks: ${global_settings}"
+inject_hooks "$global_settings" "${ABS_SKILL}/permission_gate.sh"
+echo ""
+
+# --- Step 4: Ensure scripts are executable ---
 if [ -x "$SKILL_DIR/send.sh" ] && [ -x "$SKILL_DIR/notify.sh" ] && [ -x "$SKILL_DIR/read.sh" ]; then
     echo "All scripts are executable."
 else

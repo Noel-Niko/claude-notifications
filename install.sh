@@ -140,13 +140,6 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 echo "  ✓ python3 available"
 
-# jq check (warning only — only needed for hook_notify.sh)
-if ! command -v jq >/dev/null 2>&1; then
-  echo "  ⚠ jq not found (optional — only needed for hook_notify.sh)"
-else
-  echo "  ✓ jq available (optional)"
-fi
-
 # Source scripts check
 if [[ ! -d "$SRC_DIR" ]]; then
   echo "ERROR: Source scripts not found at ${SRC_DIR}" >&2
@@ -429,7 +422,15 @@ If the user mentions "iMessage", "phone", "away from computer", or "away from th
 - User says "switch to iMessage" → phone mode immediately
 - User texts "switch to IDE" (via iMessage reply) → IDE mode immediately
 
-**After /compact:** Re-read this section and SKILL.md. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
+**Phone mode activation (MANDATORY — every step):**
+1. Run: `touch /tmp/imessage-notify-phone-mode` (enables permission hook)
+2. If the user'\''s message includes a task, begin it and send progress via `send.sh`
+3. If the user'\''s message is ONLY about switching modes, use `notify.sh` (NOT send.sh): "Phone mode active. What would you like me to work on?" — wait for their reply. The reply IS their first task.
+4. CRITICAL: Never use `send.sh` and then stop. The user is on their phone — use `notify.sh` to wait for their next instruction.
+
+**Phone mode deactivation:** Run `rm -f /tmp/imessage-notify-phone-mode` then confirm via IDE.
+
+**After /compact:** Re-read this section and SKILL.md. If phone mode was active, run `touch /tmp/imessage-notify-phone-mode` and send confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, run `rm -f /tmp/imessage-notify-phone-mode` and default to IDE mode.
 
 **IDE mode behavior:**
 - Use `AskUserQuestion` or `ExitPlanMode` for approvals
@@ -438,6 +439,7 @@ If the user mentions "iMessage", "phone", "away from computer", or "away from th
 **Phone mode behavior — IDE is NOT a communication channel:**
 - Use `notify.sh` for ALL approvals — never show IDE prompts
 - Use `send.sh` for fire-and-forget status updates
+- After completing a task, use `notify.sh` to ask what'\''s next — do NOT stop and wait for IDE input
 - Check every reply for "switch to IDE"
 - Include full context in messages (the user only sees their phone)
 - IDE text: ONLY brief trace lines ("Sent via iMessage.", "Running tests.")
@@ -477,26 +479,9 @@ echo "════════════════════════�
 echo "  Installation complete!"
 echo "════════════════════════════════════════════════════════"
 echo ""
-echo "Optional: To enable automatic hook notifications, add this to"
-echo "your ~/.claude/settings.json under \"hooks\":"
-echo ""
-cat <<'HOOKSNIPPET'
-{
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/skills/imessage-notify/hook_notify.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKSNIPPET
+echo "Hooks configured automatically in ~/.claude/settings.json:"
+echo "  • PermissionRequest → routes approval prompts through iMessage in phone mode"
+echo "  • SessionStart/SessionEnd → cleans up phone mode flag on session lifecycle"
 echo ""
 echo "To update later: git pull && ./install.sh"
 echo ""

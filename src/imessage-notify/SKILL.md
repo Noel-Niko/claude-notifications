@@ -56,7 +56,33 @@ matches when contextual evidence is clear.
 - User says "switch to iMessage" → phone mode immediately
 - User texts "switch to IDE" (via iMessage reply) → IDE mode immediately
 
-**After /compact:** Re-read this section. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
+**Phone mode activation sequence (MANDATORY — follow every step):**
+
+When entering phone mode, execute these steps in order:
+
+1. Run: `touch /tmp/imessage-notify-phone-mode` (enables the permission hook)
+2. If the user's message includes a task (e.g., "switch to iMessage and review
+   the codebase"), begin the task and send progress via `send.sh`
+3. If the user's message is ONLY about switching modes (no task), send a
+   confirmation via `notify.sh` (NOT send.sh) and wait for their reply:
+   `"Phone mode active. What would you like me to work on?"`
+   The user's reply IS their first task — process it immediately.
+4. IDE trace: "Phone mode active. Waiting for instructions via iMessage."
+
+**CRITICAL:** Always use `notify.sh` (wait-for-reply) when you need the user's
+next instruction. If you use `send.sh` (fire-and-forget) and stop, the user is
+stranded on their phone with no way to give you work — they'd have to come back
+to the IDE to type another message, defeating the purpose of phone mode.
+
+**Phone mode deactivation sequence:**
+
+When the user replies "switch to IDE" (or similar) via iMessage:
+
+1. Run: `rm -f /tmp/imessage-notify-phone-mode` (disables the permission hook)
+2. Confirm via IDE text: "Switched back to IDE mode."
+3. Resume using IDE prompts for approvals.
+
+**After /compact:** Re-read this section. If you were in phone mode before compaction, run `touch /tmp/imessage-notify-phone-mode` and send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, run `rm -f /tmp/imessage-notify-phone-mode` and default to IDE mode.
 
 **IDE mode behavior:**
 - Use `AskUserQuestion` or `ExitPlanMode` for approvals (DO NOT use notify.sh for approvals)
@@ -71,8 +97,10 @@ looking at it. All substantive output goes through iMessage only.
 - Use `send.sh` for fire-and-forget status updates
 - NEVER use both IDE approvals and `notify.sh` for the same approval
 - Check every reply for "switch to IDE" command
-- If detected, switch back to IDE mode and confirm via IDE
+- If detected, run the deactivation sequence above
 - Include full context in iMessages (the user only sees their phone)
+- After completing a task, use `notify.sh` to ask what's next — do NOT
+  stop and wait for IDE input
 
 **IDE output rules (phone mode):**
 - The ONLY text that should appear in the IDE is brief operational trace
@@ -89,7 +117,9 @@ looking at it. All substantive output goes through iMessage only.
 **On mode-switch reminder:**
 If the user reminds you to use iMessage protocol:
 - From the next response onward, apply all IDE output rules above.
-- Send acknowledgment via `send.sh` (not IDE text).
+- Run `touch /tmp/imessage-notify-phone-mode` if not already present.
+- Send acknowledgment via `notify.sh` (not IDE text) and wait for their
+  instruction.
 - Do not simply confirm the reminder and continue writing to the IDE.
 
 ## Scripts

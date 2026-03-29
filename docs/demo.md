@@ -39,9 +39,9 @@ Test the iMessage notification system with me using a 5-step simulated workflow:
 
 STEP 1: Start in IDE mode (default) and ask me a simple approval question
 
-STEP 2: Since this is a multi-step task (5 approvals total), offer to switch to phone mode
+STEP 2: I'll say "switch to iMessage" — switch to phone mode immediately (no confirmation needed)
 
-STEP 3: If I accept, switch to phone mode and send the next 3 approvals via iMessage ONLY using notify.sh (NO IDE prompts during phone mode)
+STEP 3: In phone mode, send the next 3 approvals via iMessage ONLY using notify.sh (NO IDE prompts during phone mode). Permission prompts for Write/Edit should route through iMessage automatically via the hook.
 
 STEP 4: Watch for "switch to IDE" in my phone replies. When detected, switch back to IDE mode
 
@@ -63,9 +63,9 @@ Begin the 5-step demo workflow now.
 - Claude shows an approval prompt in the IDE
 - Respond in the IDE (click an option)
 
-**2. Mode Switch Offer**
-- Claude asks: "This is a multi-step task. Want to switch to phone approvals?"
-- Choose: **"Yes, switch to phone"**
+**2. Mode Switch**
+- Say: **"switch to iMessage"**
+- Claude switches to phone mode immediately (no confirmation prompt)
 
 **3. Phone Approvals (Steps 2-4)**
 - Check your phone - you should see iMessages like:
@@ -91,18 +91,21 @@ Begin the 5-step demo workflow now.
 ### Correct Behavior
 
 1. **IDE mode**: Approvals show in IDE, no phone messages
-2. **Phone mode**: Approvals come to phone, NO IDE interruptions
-3. **Mode switching**: Works in both directions smoothly
-4. **No double-approval**: You only respond once per step (either phone OR IDE)
-5. **Immediate delivery**: Phone messages arrive within 1-2 seconds
+2. **Phone mode activation**: Claude creates flag file, asks "What would you like me to work on?" via iMessage and waits for your reply
+3. **Phone mode**: All communication on phone, NO IDE interruptions
+4. **Permission routing**: Write/Edit/Read prompts arrive on phone as "Allow? YES or NO" (not in IDE)
+5. **Continuous loop**: After each task, Claude asks "What's next?" via iMessage — never stops and waits for IDE input
+6. **No double-approval**: You only respond once per step (either phone OR IDE)
+7. **Immediate delivery**: Phone messages arrive within 1-2 seconds
 
 ### Incorrect Behavior (Report if you see this)
 
-1. **Messages delayed**: Phone messages arrive AFTER IDE approval
-2. **Double prompts**: Both IDE and phone ask for approval simultaneously
-3. **No messages**: Phone messages never arrive (check troubleshooting)
-4. **Mode stuck**: Can't switch between modes
-5. **Errors**: AppleScript errors or send failures
+1. **Claude stops after switching**: Claude sends a fire-and-forget message and goes idle — should use notify.sh to wait for your task
+2. **IDE prompts in phone mode**: "Do you want to proceed?" appears in IDE — permission hook should route it to phone
+3. **No flag file**: `ls /tmp/imessage-notify-phone-mode` shows nothing after switching — Claude forgot the activation sequence
+4. **Double prompts**: Both IDE and phone ask for approval simultaneously
+5. **No messages**: Phone messages never arrive (check troubleshooting)
+6. **Mode stuck**: Can't switch between modes
 
 ---
 
@@ -173,12 +176,14 @@ Run a simulated long task (10 seconds) and notify me on my phone when complete. 
 Use this to verify all features work:
 
 - [ ] IDE mode: Single approval in IDE (no phone)
-- [ ] Multi-step detection: Offers phone mode for 3+ steps
-- [ ] Switch to phone: Accepts "Yes" and switches modes
+- [ ] Keyword trigger: Switches to phone mode on "switch to iMessage"
+- [ ] Flag file created: `ls /tmp/imessage-notify-phone-mode` exists after switch
+- [ ] First contact: Claude asks "What would you like me to work on?" via notify.sh (waits for reply)
 - [ ] Phone approvals: Messages arrive immediately
-- [ ] No IDE interrupts: IDE doesn't prompt during phone mode
-- [ ] Switch to IDE: Detects "switch to IDE" from phone
-- [ ] Mode persists: Stays in chosen mode across steps
+- [ ] Permission routing: Write/Edit prompts go to phone, not IDE
+- [ ] No IDE interrupts: IDE only shows brief trace lines during phone mode
+- [ ] Continuous loop: After task, Claude asks "What's next?" (doesn't stop)
+- [ ] Switch to IDE: Detects "switch to IDE" from phone, removes flag file
 - [ ] Error handling: Shows helpful messages on failure
 - [ ] Fire-and-forget: `send.sh` works for status updates
 - [ ] Multi-repo: Works correctly with multiple Claude sessions

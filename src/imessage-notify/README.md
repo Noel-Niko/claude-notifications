@@ -73,7 +73,10 @@ Pending requests are tracked in `/tmp/imessage-notify-pending/`. Atomic `mkdir`-
 | `send.sh` | Send a tagged iMessage via AppleScript |
 | `read.sh` | Poll `chat.db` for replies with ID matching and claim logic |
 | `notify.sh` | Combined send + wait-for-reply |
+| `permission_gate.sh` | Claude Code PermissionRequest hook — routes IDE prompts through iMessage in phone mode |
 | `check_fda.sh` | Verify Full Disk Access and print setup instructions if missing |
+| `check_imessage.sh` | Verify Messages.app is installed and iMessage is activated |
+| `whitelist_commands.sh` | Inject permissions + hooks into settings, configure RECIPIENT and aliases |
 
 ## Configuration
 

@@ -6,8 +6,9 @@ Defines:
 - script_sandbox: Isolated sandbox for send.sh/notify.sh/read.sh tests
 - whitelist_sandbox: Isolated sandbox for whitelist_commands.sh tests
 - uninstall_sandbox: Isolated sandbox for uninstall.sh tests
+- permission_gate_sandbox: Isolated sandbox for permission_gate.sh tests
 - Shared helpers: run_send(), run_whitelist(), run_uninstall(),
-  read_settings(), get_recipient(), patch_send_sh()
+  read_settings(), get_recipient(), patch_send_sh(), run_permission_gate()
 """
 
 import json
@@ -417,4 +418,102 @@ def run_uninstall(sandbox, *args, expect_fail=False):
             f"Script failed (exit {result.returncode}):\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
+    return result
+
+
+# =============================================================================
+# Permission Gate (hook) support
+# =============================================================================
+
+# Mock notify.sh that returns a configurable reply without sending real iMessages.
+# Controlled by env vars:
+#   MOCK_NOTIFY_REPLY: "yes", "no", "timeout", "fail", or any string
+#   MOCK_NOTIFY_CAPTURE: file path to write the captured message to
+MOCK_NOTIFY_SH = """\
+#!/usr/bin/env bash
+# Mock notify.sh for testing permission_gate.sh
+if [ "${1:-}" = "-f" ]; then
+  msg="$(cat "$2")"
+  rm -f "$2"
+else
+  msg="${1:-}"
+fi
+if [ -n "${MOCK_NOTIFY_CAPTURE:-}" ]; then
+  echo "$msg" > "$MOCK_NOTIFY_CAPTURE"
+fi
+case "${MOCK_NOTIFY_REPLY:-yes}" in
+  timeout) echo "TIMEOUT: No reply received within 300s" >&2; exit 1 ;;
+  fail) echo "ERROR: Failed to send iMessage" >&2; exit 1 ;;
+  *) echo "${MOCK_NOTIFY_REPLY:-yes}"; exit 0 ;;
+esac
+"""
+
+
+@pytest.fixture()
+def permission_gate_sandbox(tmp_path):
+    """Isolated sandbox for permission_gate.sh tests.
+
+    Copies permission_gate.sh from source and creates a mock notify.sh
+    that returns configurable replies without sending real iMessages.
+
+    Returns dict with keys: skill, gate_sh, flag_file, capture_file
+    """
+    skill = tmp_path / "skill"
+    skill.mkdir()
+
+    # Copy permission_gate.sh from source (may not exist yet during TDD)
+    gate_src = SKILL_DIR / "permission_gate.sh"
+    if gate_src.exists():
+        shutil.copy2(gate_src, skill / "permission_gate.sh")
+        (skill / "permission_gate.sh").chmod(0o755)
+
+    # Create mock notify.sh
+    mock_notify = skill / "notify.sh"
+    mock_notify.write_text(MOCK_NOTIFY_SH)
+    mock_notify.chmod(0o755)
+
+    # Flag file path (not created by default — tests create it as needed)
+    flag_file = tmp_path / "phone-mode-flag"
+
+    # Capture file for inspecting what message was sent to notify.sh
+    capture_file = tmp_path / "notify-capture"
+
+    return {
+        "skill": skill,
+        "gate_sh": skill / "permission_gate.sh",
+        "flag_file": flag_file,
+        "capture_file": capture_file,
+    }
+
+
+def run_permission_gate(sandbox, stdin_json, reply="yes", env_extra=None):
+    """Run permission_gate.sh with given stdin JSON and mock notify reply.
+
+    Args:
+        sandbox: permission_gate_sandbox dict
+        stdin_json: dict to serialize as JSON stdin, or raw string
+        reply: mock notify.sh reply ("yes", "no", "timeout", "fail", or any string)
+        env_extra: additional env vars to set
+
+    Returns:
+        subprocess.CompletedProcess
+    """
+    env = {
+        **os.environ,
+        "PHONE_MODE_FLAG": str(sandbox["flag_file"]),
+        "MOCK_NOTIFY_REPLY": reply,
+        "MOCK_NOTIFY_CAPTURE": str(sandbox["capture_file"]),
+    }
+    if env_extra:
+        env.update(env_extra)
+
+    stdin_text = json.dumps(stdin_json) if isinstance(stdin_json, dict) else stdin_json
+
+    result = subprocess.run(
+        [str(sandbox["gate_sh"])],
+        capture_output=True,
+        text=True,
+        input=stdin_text,
+        env=env,
+    )
     return result
