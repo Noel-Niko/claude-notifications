@@ -85,18 +85,14 @@ class TestPhoneModeFlag:
 
     def test_no_phone_mode_flag(self, permission_gate_sandbox):
         """No flag file → exit 0, empty stdout (fall through to IDE prompt)."""
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         assert result.stdout.strip() == ""
 
     def test_phone_mode_flag_present(self, permission_gate_sandbox):
         """Flag file exists → hook routes through iMessage and returns decision."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         assert _parse_decision(result) == "allow"
 
@@ -108,9 +104,7 @@ class TestPhoneModeFlag:
         stale_time = time.time() - (5 * 3600)
         os.utime(str(flag), (stale_time, stale_time))
 
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         assert result.stdout.strip() == ""
         # Flag should be deleted
@@ -119,9 +113,7 @@ class TestPhoneModeFlag:
     def test_fresh_flag_not_expired(self, permission_gate_sandbox):
         """Flag file created recently → routes through iMessage normally."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         assert _parse_decision(result) == "allow"
 
@@ -137,18 +129,14 @@ class TestReplyParsing:
     def test_yes_reply(self, permission_gate_sandbox):
         """Reply 'yes' → allow."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         assert _parse_decision(result) == "allow"
 
     def test_no_reply(self, permission_gate_sandbox):
         """Reply 'no' → deny."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="no"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="no")
         assert result.returncode == 0
         assert _parse_decision(result) == "deny"
 
@@ -156,9 +144,7 @@ class TestReplyParsing:
     def test_case_insensitive_yes(self, permission_gate_sandbox, reply):
         """Various forms of 'yes' all result in allow."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply=reply
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply=reply)
         assert result.returncode == 0
         assert _parse_decision(result) == "allow"
 
@@ -166,9 +152,7 @@ class TestReplyParsing:
     def test_case_insensitive_no(self, permission_gate_sandbox, reply):
         """Various forms of 'no' all result in deny."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply=reply
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply=reply)
         assert result.returncode == 0
         assert _parse_decision(result) == "deny"
 
@@ -202,9 +186,7 @@ class TestTimeoutAndErrors:
     def test_notify_failure_fallthrough(self, permission_gate_sandbox):
         """notify.sh send failure → exit 0, empty stdout (fall through to IDE)."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="fail"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="fail")
         assert result.returncode == 0
         assert result.stdout.strip() == ""
 
@@ -275,9 +257,7 @@ class TestStdinParsing:
     def test_valid_json_parsed(self, permission_gate_sandbox):
         """Valid JSON stdin is parsed correctly into a formatted message."""
         permission_gate_sandbox["flag_file"].touch()
-        result = run_permission_gate(
-            permission_gate_sandbox, WRITE_INPUT, reply="yes"
-        )
+        result = run_permission_gate(permission_gate_sandbox, WRITE_INPUT, reply="yes")
         assert result.returncode == 0
         captured = permission_gate_sandbox["capture_file"].read_text()
         assert "Write" in captured
