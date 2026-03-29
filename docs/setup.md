@@ -155,15 +155,19 @@ You: Click "Yes" in IDE
 **Phone mode** (triggered by keywords):
 ```
 You: "switch to iMessage" or "I'm away from the computer"
-Claude: [immediately switches to phone mode — no confirmation needed]
-Claude: [sends all approvals via iMessage, permission prompts routed to phone]
-You: [reply from your phone, no IDE interaction needed]
+Claude: [creates flag file, enables permission hook]
+Claude: [via iMessage] "Phone mode active. What would you like me to work on?"
+You: [reply from your phone with your task]
+Claude: [works on task, sends results via iMessage]
+Claude: [if Write/Edit/Read needed] "Write file: src/main.py. Allow? YES or NO"
+You: [reply YES or NO from phone]
+Claude: [via iMessage] "Done. What's next?"
 ```
 
 **Switch back**:
 ```
 You: [text "switch to IDE" on your phone]
-Claude: [switches back to IDE mode]
+Claude: [removes flag file, switches back to IDE mode]
 ```
 
 ## Multi-Session Support

@@ -75,18 +75,20 @@ This injects permission entries so commands don't require IDE approval.
 - Approvals show in IDE
 - No phone messages (unless status updates)
 
-**Phone mode (multi-step tasks):**
-- Messages arrive on your phone immediately
-- Reply from phone
-- NO IDE interruption during phone mode
+**Phone mode:**
+- Say "switch to iMessage" in Claude Code
+- Claude creates the phone mode flag file and asks you via iMessage: "What would you like me to work on?"
+- Reply from your phone with your task
+- IDE permission prompts (Write, Edit, Read) are routed to your phone automatically via the PermissionRequest hook
+- After each task, Claude asks what's next via iMessage (never waits for IDE input)
 
-**Mode switching:**
-- Say "switch to iMessage" in IDE > switches to phone mode
-- Text "switch to IDE" to phone > switches to IDE mode
+**Switch back:**
+- Text "switch to IDE" on your phone
+- Claude removes the flag file and returns to IDE mode
 
 ### First use: Command approval
 
-If you ran `./install.sh`, commands are pre-approved. If you still see "Do you want to proceed?", click **"Yes"** -- it will be remembered. Re-run `whitelist_commands.sh` from the repo to fix permanently.
+If you ran `./install.sh`, commands are pre-approved and hooks are configured. If you still see "Do you want to proceed?" in IDE mode, re-run `whitelist_commands.sh` from the repo. In phone mode, these prompts are routed to your phone automatically.
 
 ## Updating
 

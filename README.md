@@ -36,9 +36,11 @@ iMessage notifications for Claude Code. Send messages to your phone, get approva
 
 ```
 You (in Claude Code) : "Review CLAUDE.md and switch to iMessage mode"
-Claude               : Reads instructions, switches to phone mode
-Your phone           : Receives all messages and approval requests via iMessage
-You (on phone)       : Reply YES/NO to approve actions, "switch to IDE" to return
+Claude               : Reads instructions, activates phone mode, enables permission hook
+Your phone           : "Phone mode active. What would you like me to work on?"
+You (on phone)       : Reply with your task — Claude works and sends results via iMessage
+You (on phone)       : Reply YES/NO to approve Write/Edit/Read actions
+You (on phone)       : Reply "switch to IDE" when you're back at the computer
 ```
 
 **New session:** Say `"Review CLAUDE.md and switch to iMessage mode"`
@@ -46,9 +48,10 @@ You (on phone)       : Reply YES/NO to approve actions, "switch to IDE" to retur
 **Existing session:** Say `"switch to iMessage"`, `"use iMessage"`, or mention `"phone"` / `"away from computer"`
 
 Claude will automatically:
-1. Switch to phone mode (all communication goes to your phone via iMessage)
-2. Route IDE permission prompts (Write, Edit, Read) through iMessage for approval
-3. Send status updates and results to your phone
+1. Create the phone mode flag file (enables the permission routing hook)
+2. Ask you via iMessage what you'd like to work on (and wait for your reply)
+3. Route IDE permission prompts (Write, Edit, Read) through iMessage for approval
+4. After completing each task, ask what's next via iMessage (never stops and waits for IDE input)
 
 Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
@@ -228,17 +231,18 @@ sequenceDiagram
 
     You->>Claude: "switch to iMessage"
     Claude->>Claude: touch /tmp/imessage-notify-phone-mode
-    Claude->>You: send.sh "Phone mode active"
+    Claude->>You: notify.sh "Phone mode active. What would you like me to work on?"
+    You->>Claude: "Review the codebase for stale files"
 
-    Note over Claude: Claude wants to write a file...
+    Note over Claude: Working... wants to write a file
     Claude->>IDE: Write tool call
     IDE->>Hook: PermissionRequest event
     Hook->>Hook: Flag file exists? Yes
-    Hook->>You: notify.sh "Write file: src/main.py (1523 chars). Allow? YES or NO"
+    Hook->>You: notify.sh "Write file: docs/cleanup.md (842 chars). Allow? YES or NO"
     You->>Hook: "YES"
     Hook->>IDE: {"behavior": "allow"}
     IDE->>Claude: Write permitted
-    Claude->>You: send.sh "File written successfully"
+    Claude->>You: notify.sh "Done. What's next?"
 ```
 
 - Claude sends all results and questions to your phone via iMessage
@@ -344,7 +348,9 @@ Phone mode requires three independent systems to cooperate. When any layer fails
 flowchart TB
     subgraph Layer1["Layer 1: LLM Instructions"]
         CLAUDE["CLAUDE.md + SKILL.md"]
-        CLAUDE -->|"Keywords: 'iMessage', 'phone'"| MODE["Phone mode activated"]
+        CLAUDE -->|"Keywords: 'iMessage', 'phone'"| ACTIVATE["Activation sequence"]
+        ACTIVATE -->|"1. touch flag file"| FLAG_CREATE["/tmp/imessage-notify-phone-mode"]
+        ACTIVATE -->|"2. notify.sh: ask for task"| WAIT["Wait for user's reply"]
     end
 
     subgraph Layer2["Layer 2: CLI Permissions"]
@@ -365,8 +371,8 @@ flowchart TB
         REPLY -->|Timeout| DENY
     end
 
-    MODE -.->|"Claude uses send.sh/notify.sh"| Layer2
-    MODE -.->|"Claude creates flag file"| Layer3
+    FLAG_CREATE -.->|"Enables hook"| Layer3
+    WAIT -.->|"Uses whitelisted scripts"| Layer2
 ```
 
 ### Layer 1: LLM Instruction Layer
@@ -379,8 +385,9 @@ Additionally, Task agents (subprocesses launched for parallel research) run with
 
 **Solution:**
 - **Automatic trigger keywords:** If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, the LLM switches to phone mode immediately with no confirmation prompt.
-- **Post-compaction recovery:** After `/compact`, the LLM re-reads the iMessage section and sends a confirmation via `notify.sh` if phone mode was active.
-- **Simplified instructions:** The CLAUDE.md and SKILL.md sections were rewritten to be shorter and more directive ("just switch") rather than conditional ("offer to switch if 3+ steps").
+- **Mandatory activation sequence:** On switch, Claude must (1) create the flag file `touch /tmp/imessage-notify-phone-mode`, (2) use `notify.sh` (wait-for-reply) to ask the user for their first task — never `send.sh` (fire-and-forget) which would leave the user stranded. On deactivation, Claude removes the flag file and confirms via IDE.
+- **Continuous conversation loop:** After completing each task, Claude uses `notify.sh` to ask what's next. It never stops and waits for IDE input while in phone mode.
+- **Post-compaction recovery:** After `/compact`, the LLM re-reads the iMessage section, re-creates the flag file, and sends a confirmation via `notify.sh` if phone mode was active.
 
 ### Layer 2: CLI Tool Permission Layer
 
