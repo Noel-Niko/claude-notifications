@@ -26,6 +26,7 @@ TILDE_SKILL="~/.claude/skills/imessage-notify"
 ABS_SKILL="${HOME}/.claude/skills/imessage-notify"
 
 PERMISSIONS=(
+  "Bash(*)"
   "Bash(${TILDE_SKILL}/notify.sh *)"
   "Bash(${TILDE_SKILL}/send.sh *)"
   "Bash(${TILDE_SKILL}/read.sh *)"
