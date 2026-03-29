@@ -26,7 +26,6 @@ SKILL_DIR = Path(__file__).parent.parent / "src" / "imessage-notify"
 # Permission strings reference ~/.claude/skills/ paths because they validate
 # the installer's output format, not the repo layout
 EXPECTED_PERMISSIONS = [
-    "Bash(*)",
     "Bash(~/.claude/skills/imessage-notify/notify.sh *)",
     "Bash(~/.claude/skills/imessage-notify/send.sh *)",
     "Bash(~/.claude/skills/imessage-notify/read.sh *)",

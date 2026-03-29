@@ -5,7 +5,7 @@
 #   1. (Optional) Configures the RECIPIENT phone number or email in send.sh and read.sh
 #   2. Adds wildcard permission entries to the current repo's .claude/settings.local.json
 #   3. Adds wildcard permission entries to the global ~/.claude/settings.json
-#   4. Injects PermissionRequest/SessionEnd/SessionStart hooks into global settings
+#   4. Injects PermissionRequest/SessionEnd hooks into global settings
 #   5. Ensures all skill scripts are executable
 #
 # Usage:
@@ -29,7 +29,6 @@ TILDE_SKILL="~/.claude/skills/imessage-notify"
 ABS_SKILL="${HOME}/.claude/skills/imessage-notify"
 
 PERMISSIONS=(
-  "Bash(*)"
   "Bash(${TILDE_SKILL}/notify.sh *)"
   "Bash(${TILDE_SKILL}/send.sh *)"
   "Bash(${TILDE_SKILL}/read.sh *)"
@@ -209,25 +208,39 @@ cleanup_hook = {
         'timeout': 5,
     }]
 }
-for event in ('SessionEnd', 'SessionStart'):
-    if event not in hooks:
-        hooks[event] = [cleanup_hook]
+if 'SessionEnd' not in hooks:
+    hooks['SessionEnd'] = [cleanup_hook]
+    changed = True
+else:
+    existing_cmds = [
+        h.get('command', '')
+        for entry in hooks['SessionEnd']
+        for h in entry.get('hooks', [])
+    ]
+    if cleanup_cmd not in existing_cmds:
+        hooks['SessionEnd'].append(cleanup_hook)
         changed = True
-    else:
-        existing_cmds = [
-            h.get('command', '')
-            for entry in hooks[event]
+
+# Remove stale SessionStart hook if present (race condition with phone mode flag)
+if 'SessionStart' in hooks:
+    before = len(hooks['SessionStart'])
+    hooks['SessionStart'] = [
+        entry for entry in hooks['SessionStart']
+        if not any(
+            h.get('command', '') == cleanup_cmd
             for h in entry.get('hooks', [])
-        ]
-        if cleanup_cmd not in existing_cmds:
-            hooks[event].append(cleanup_hook)
-            changed = True
+        )
+    ]
+    if not hooks['SessionStart']:
+        del hooks['SessionStart']
+    if len(hooks.get('SessionStart', [])) < before:
+        changed = True
 
 if changed:
     with open(settings_file, 'w') as f:
         json.dump(settings, f, indent=2)
         f.write('\n')
-    print('  ✓ Hooks configured (PermissionRequest, SessionEnd, SessionStart)')
+    print('  ✓ Hooks configured (PermissionRequest, SessionEnd)')
 else:
     print('  (hooks already configured)')
 " "$settings_file" "$gate_cmd"

@@ -19,10 +19,21 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FLAG="${PHONE_MODE_FLAG:-/tmp/imessage-notify-phone-mode}"
 FLAG_TTL="${FLAG_TTL_SECONDS:-14400}"
+DEBUG_LOG="${PERMISSION_GATE_DEBUG_LOG:-/tmp/permission-gate-debug.log}"
+
+# ─── Debug logging ───
+
+_log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$DEBUG_LOG"
+}
+
+_log "--- invoked (pid=$$) ---"
+_log "FLAG=$FLAG exists=$([ -f "$FLAG" ] && echo yes || echo no)"
 
 # ─── Check phone mode flag ───
 
 if [ ! -f "$FLAG" ]; then
+  _log "EXIT: no flag file, falling through to IDE"
   exit 0
 fi
 
@@ -32,16 +43,22 @@ now="$(date +%s)"
 flag_age=$(( now - flag_mtime ))
 
 if [ "$flag_age" -gt "$FLAG_TTL" ]; then
+  _log "EXIT: stale flag (age=${flag_age}s > TTL=${FLAG_TTL}s), removing and falling through"
   rm -f "$FLAG"
   exit 0
 fi
+
+_log "Flag is fresh (age=${flag_age}s)"
 
 # ─── Read and parse stdin JSON ───
 
 input="$(cat)"
 if [ -z "$input" ]; then
+  _log "EXIT: empty stdin, falling through"
   exit 0
 fi
+
+_log "stdin tool_name hint: $(echo "$input" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('tool_name','?'))" 2>/dev/null || echo '?')"
 
 # Parse JSON fields using python3 (already a dependency of the project)
 parsed="$(python3 -c "
@@ -62,8 +79,11 @@ tool_name="$(echo "$parsed" | head -1)"
 tool_input_json="$(echo "$parsed" | tail -1)"
 
 if [ -z "$tool_name" ]; then
+  _log "EXIT: empty tool_name after parse, falling through"
   exit 0
 fi
+
+_log "Parsed tool_name=$tool_name"
 
 # ─── Format message by tool type ───
 
@@ -132,13 +152,17 @@ if [ -f /tmp/imessage-gate-notify-err ]; then
   rm -f /tmp/imessage-gate-notify-err
 fi
 
+_log "notify.sh exit=$notify_exit reply=$(echo "$reply" | head -c 100)"
+
 # If notify.sh failed to send (not a timeout), fall through to IDE
 if [ "$notify_exit" -ne 0 ]; then
   if echo "$notify_stderr" | grep -qi "ERROR"; then
+    _log "EXIT: notify.sh send failure, falling through to IDE"
     # Send failure — fall through to IDE prompt
     exit 0
   fi
   # Timeout — deny with feedback
+  _log "EXIT: notify.sh timeout, denying"
   echo "No reply received within timeout. Permission denied." >&2
   exit 2
 fi
@@ -152,14 +176,17 @@ deny_json='{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision"
 
 case "$reply_lower" in
   yes|y)
+    _log "DECISION: allow (reply=$reply_lower)"
     echo "$allow_json"
     exit 0
     ;;
   no|n)
+    _log "DECISION: deny (reply=$reply_lower)"
     echo "$deny_json"
     exit 0
     ;;
   *)
+    _log "DECISION: deny (ambiguous reply=$reply_lower)"
     echo "$deny_json"
     exit 0
     ;;

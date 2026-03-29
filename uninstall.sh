@@ -4,7 +4,7 @@
 # What it does:
 #   1. Removes ~/.claude/skills/imessage-notify/ directory
 #   2. Removes iMessage permission entries from ~/.claude/settings.json (global)
-#   2b. Removes iMessage hooks from ~/.claude/settings.json (global)
+#   2b. Removes iMessage hooks from ~/.claude/settings.json (PermissionRequest, SessionEnd, legacy SessionStart)
 #   3. Removes installer blocks from ~/.claude/CLAUDE.md
 #   4. Removes claude-notifications/ entry from parent repo's .gitignore
 #   5. Removes runtime pending directory and phone mode flag
@@ -27,7 +27,6 @@ TILDE_SKILL="~/.claude/skills/imessage-notify"
 ABS_SKILL="${HOME}/.claude/skills/imessage-notify"
 
 PERMISSIONS=(
-  "Bash(*)"
   "Bash(${TILDE_SKILL}/notify.sh *)"
   "Bash(${TILDE_SKILL}/send.sh *)"
   "Bash(${TILDE_SKILL}/read.sh *)"
