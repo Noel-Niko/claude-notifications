@@ -1,10 +1,49 @@
+# claude-notifications
 
-# To Use
+iMessage notifications for Claude Code. Send messages to your phone, get approvals via iMessage, and switch between IDE and phone approval modes dynamically.
 
-In Claude Code:
+## Table of Contents
 
-- **New session**: Say "Review CLAUDE.md and switch to iMessage mode"
-- **Existing session**: Say "switch to iMessage", "use iMessage", or mention "phone" / "away from computer"
+- [Quick Start](#quick-start)
+- [Install](#install)
+  - [Git Clone](#git-clone)
+  - [Internal Artifactory (pip)](#installation-via-internal-artifactory-pip)
+- [Prerequisites](#prerequisites)
+- [What It Does](#what-it-does)
+- [Usage](#usage)
+  - [Send a Status Update](#send-a-status-update-fire-and-forget)
+  - [Send and Wait for Reply](#send-and-wait-for-reply)
+  - [Multiline Messages](#multiline-messages-file-mode)
+  - [Phone Mode in Claude Code](#phone-mode-in-claude-code)
+- [Per-Repo Permissions](#per-repo-permissions)
+- [Updating](#updating)
+- [Uninstall](#uninstall)
+- [Multi-Session Support](#multi-session-support)
+- [Reply Routing / Aliases](#reply-routing--aliases)
+- [Architecture](#architecture)
+  - [Layer 1: LLM Instructions](#layer-1-llm-instruction-layer)
+  - [Layer 2: CLI Permissions](#layer-2-cli-tool-permission-layer)
+  - [Layer 3: PermissionRequest Hook](#layer-3-permissionrequest-hook-layer)
+  - [How All Three Layers Work Together](#all-three-layers-must-be-configured)
+  - [Remaining Limitations](#remaining-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Documentation](#documentation)
+
+---
+
+## Quick Start
+
+```
+You (in Claude Code) : "Review CLAUDE.md and switch to iMessage mode"
+Claude               : Reads instructions, switches to phone mode
+Your phone           : Receives all messages and approval requests via iMessage
+You (on phone)       : Reply YES/NO to approve actions, "switch to IDE" to return
+```
+
+**New session:** Say `"Review CLAUDE.md and switch to iMessage mode"`
+
+**Existing session:** Say `"switch to iMessage"`, `"use iMessage"`, or mention `"phone"` / `"away from computer"`
 
 Claude will automatically:
 1. Switch to phone mode (all communication goes to your phone via iMessage)
@@ -13,13 +52,11 @@ Claude will automatically:
 
 Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
-_____
-
-# claude-notifications
-
-iMessage notifications for Claude Code. Send messages to your phone, get approvals via iMessage, and switch between IDE and phone approval modes dynamically.
+---
 
 ## Install
+
+### Git Clone
 
 ```bash
 git clone https://github.com/wwg-internal/claude-notifications.git
@@ -36,13 +73,16 @@ Or non-interactive:
 
 The installer prompts for your phone number and optional reply aliases, copies scripts, configures permissions and Claude Code hooks, checks Full Disk Access, sends a test message, and offers an interactive demo.
 
-## Installation via Internal Artifactory (pip)
+### Installation via Internal Artifactory (pip)
 
 The `claude-notifications` package is published to Grainger's internal JFrog Artifactory.
 
 - **Package**: https://graingerinc.jfrog.io/ui/packages/pypi:%2F%2Fclaude-notifications/1.0.0
 
-### Step 1: Configure pip Authentication
+<details>
+<summary>Expand Artifactory setup instructions</summary>
+
+#### Step 1: Configure pip Authentication
 
 This is a one-time setup per machine.
 
@@ -63,7 +103,7 @@ EOF
 pip config list
 ```
 
-### Step 2: Install the Package
+#### Step 2: Install the Package
 
 ```bash
 # uv
@@ -80,42 +120,58 @@ cd $(python -c "import importlib.resources; print(importlib.resources.files('cla
 ./install.sh
 ```
 
-### Step 3: Upgrade to Latest Version
+#### Step 3: Upgrade to Latest Version
 
 ```bash
 pip install --upgrade claude-notifications
 ```
 
-### Troubleshooting Artifactory Installation
+#### Troubleshooting Artifactory Installation
 
-#### "Could not find a version that satisfies the requirement"
+**"Could not find a version that satisfies the requirement"**
+- `pip.conf` not configured or authentication token expired.
+- Verify: `pip config list`
+- Regenerate token from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/)
 
-**Cause:** `pip.conf` not configured or authentication token expired.
+**"401 Unauthorized" or "403 Forbidden"**
+- Invalid or expired authentication token. Regenerate from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/) and update `~/.pip/pip.conf`.
 
-1. Verify pip configuration: `pip config list`
-2. Regenerate token from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/)
-3. Update `~/.pip/pip.conf` with new token
+</details>
 
-#### "401 Unauthorized" or "403 Forbidden"
-
-**Cause:** Invalid or expired authentication token. Regenerate from [LaunchPoint](https://launchpoint.internal.grainger.com/docs/default/component/nextgen-platform-user-manual/jfrog-artifactory/local-machine-setup/python-pip/) and update `~/.pip/pip.conf`.
-
-### Installation Methods Comparison
+#### Installation Methods Comparison
 
 | Method | Use Case | Command |
 |--------|----------|---------|
-| **Artifactory (pip)** | Stable releases | `pip install claude-notifications` |
 | **Git clone + install.sh** | Development, latest changes | `git clone ... && ./install.sh` |
+| **Artifactory (pip)** | Stable releases | `pip install claude-notifications` |
+
+---
 
 ## Prerequisites
+
 ![fda.jpg](docs/fda.jpg)
 ![FDA.gif](docs/FDA.gif)
+
 - **macOS** (Messages.app, AppleScript, sqlite3)
 - **iMessage** account signed in to Messages.app
 - **Full Disk Access** for your terminal app (required for reading replies)
 - **python3** (for JSON permission injection and hook scripts)
 
+---
+
 ## What It Does
+
+```
+~/.claude/skills/imessage-notify/
+├── send.sh                 # Fire-and-forget iMessage
+├── notify.sh               # Send + wait for reply
+├── read.sh                 # Poll chat.db for replies
+├── permission_gate.sh      # Hook: route IDE prompts through iMessage
+├── check_fda.sh            # Verify Full Disk Access
+├── check_imessage.sh       # Verify Messages.app + iMessage
+├── whitelist_commands.sh    # Inject permissions + hooks + configure recipient
+└── SKILL.md                # Instructions Claude Code reads for the protocol
+```
 
 | Script | Purpose |
 |--------|---------|
@@ -126,6 +182,8 @@ pip install --upgrade claude-notifications
 | `check_fda.sh` | Verify Full Disk Access is granted |
 | `check_imessage.sh` | Verify Messages.app and iMessage are active |
 | `whitelist_commands.sh` | Inject permissions + hooks + configure RECIPIENT and aliases |
+
+---
 
 ## Usage
 
@@ -160,6 +218,29 @@ echo "Short question" | ~/.claude/skills/imessage-notify/notify.sh - 300 10
 Say **"use iMessage"**, **"switch to iMessage"**, or mention **"phone"** / **"away from computer"** in any Claude Code session. Claude will immediately switch to phone-only communication.
 
 **What happens in phone mode:**
+
+```mermaid
+sequenceDiagram
+    participant You as You (phone)
+    participant Hook as permission_gate.sh
+    participant Claude as Claude Code
+    participant IDE as IDE
+
+    You->>Claude: "switch to iMessage"
+    Claude->>Claude: touch /tmp/imessage-notify-phone-mode
+    Claude->>You: send.sh "Phone mode active"
+
+    Note over Claude: Claude wants to write a file...
+    Claude->>IDE: Write tool call
+    IDE->>Hook: PermissionRequest event
+    Hook->>Hook: Flag file exists? Yes
+    Hook->>You: notify.sh "Write file: src/main.py (1523 chars). Allow? YES or NO"
+    You->>Hook: "YES"
+    Hook->>IDE: {"behavior": "allow"}
+    IDE->>Claude: Write permitted
+    Claude->>You: send.sh "File written successfully"
+```
+
 - Claude sends all results and questions to your phone via iMessage
 - IDE permission prompts (Write, Edit, Read) are automatically routed through iMessage for your approval instead of showing in the IDE
 - You reply YES or NO on your phone to approve or deny each action
@@ -168,6 +249,8 @@ Say **"use iMessage"**, **"switch to iMessage"**, or mention **"phone"** / **"aw
 **How permission routing works:** The installer configures a Claude Code `PermissionRequest` hook that intercepts IDE approval dialogs. When phone mode is active (flag file exists at `/tmp/imessage-notify-phone-mode`), the hook sends the request to your phone via `notify.sh` and waits for your YES/NO reply. When phone mode is off, the hook does nothing and the normal IDE prompt appears.
 
 Reply **"switch to IDE"** on your phone to switch back to IDE mode.
+
+---
 
 ## Per-Repo Permissions
 
@@ -179,6 +262,8 @@ cd /path/to/your/repo
 
 This injects per-repo permission entries into `.claude/settings.local.json` so iMessage scripts don't require IDE approval. (Hooks and global permissions are already configured by `install.sh` and don't need per-repo setup.)
 
+---
+
 ## Updating
 
 ```bash
@@ -188,6 +273,8 @@ git pull
 ```
 
 The installer is idempotent. It detects your existing RECIPIENT and aliases and offers to keep them.
+
+---
 
 ## Uninstall
 
@@ -202,12 +289,32 @@ Use `--all` to also clean per-repo local settings:
 ./uninstall.sh --all
 ```
 
+---
+
 ## Multi-Session Support
 
 Multiple Claude Code sessions can run simultaneously without cross-talk:
+
+```mermaid
+flowchart LR
+    subgraph Session A - api-server
+        A[Claude] -->|send.sh| MA["[api-server|REQ-a1b2] Deploy?"]
+    end
+    subgraph Session B - frontend
+        B[Claude] -->|send.sh| MB["[frontend|REQ-e5f6] Run e2e?"]
+    end
+    MA --> Phone
+    MB --> Phone
+
+    Phone -->|"a1b2 yes"| A
+    Phone -->|"yes" (most recent)| B
+```
+
 - Each message is tagged: `[repo-name|REQ-<unique-id>] message`
 - Reply with the ID to target a specific session: `a1b2c3d4 yes`
 - Plain replies go to the most recent pending request
+
+---
 
 ## Reply Routing / Aliases
 
@@ -227,9 +334,40 @@ When you send to an email address (e.g., `nnosse@wgu.edu`), your phone may reply
 
 **Find your identities:** Open Messages.app → Settings → iMessage → "You can be reached for messages at."
 
-## Architecture: Two-Layer Permission Problem and Solution
+---
 
-Phone mode requires two independent systems to cooperate. When either layer fails, the user experience breaks. This section documents the architecture, the problems, and how each is solved.
+## Architecture
+
+Phone mode requires three independent systems to cooperate. When any layer fails, the user experience breaks.
+
+```mermaid
+flowchart TB
+    subgraph Layer1["Layer 1: LLM Instructions"]
+        CLAUDE["CLAUDE.md + SKILL.md"]
+        CLAUDE -->|"Keywords: 'iMessage', 'phone'"| MODE["Phone mode activated"]
+    end
+
+    subgraph Layer2["Layer 2: CLI Permissions"]
+        PERMS["settings.json permissions"]
+        PERMS -->|"Bash(*) wildcard"| BASH_OK["Bash auto-approved"]
+        PERMS -->|"notify.sh *, send.sh *"| SCRIPT_OK["iMessage scripts auto-approved"]
+    end
+
+    subgraph Layer3["Layer 3: PermissionRequest Hook"]
+        HOOK["permission_gate.sh"]
+        FLAG{"/tmp/imessage-notify-phone-mode exists?"}
+        HOOK --> FLAG
+        FLAG -->|No| IDE_PROMPT["Normal IDE prompt"]
+        FLAG -->|Yes| IMSG["Send to phone via notify.sh"]
+        IMSG --> REPLY{"Reply YES/NO?"}
+        REPLY -->|YES| ALLOW["Allow action"]
+        REPLY -->|NO| DENY["Deny action"]
+        REPLY -->|Timeout| DENY
+    end
+
+    MODE -.->|"Claude uses send.sh/notify.sh"| Layer2
+    MODE -.->|"Claude creates flag file"| Layer3
+```
 
 ### Layer 1: LLM Instruction Layer
 
@@ -240,7 +378,7 @@ Phone mode requires two independent systems to cooperate. When either layer fail
 Additionally, Task agents (subprocesses launched for parallel research) run with independent context. They have no awareness of the parent session's phone mode and cannot use iMessage.
 
 **Solution:**
-- **Automatic trigger keywords:** If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, the LLM switches to phone mode immediately with no confirmation prompt. This eliminates the previous "offer phone mode" conditional that the LLM kept ignoring.
+- **Automatic trigger keywords:** If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, the LLM switches to phone mode immediately with no confirmation prompt.
 - **Post-compaction recovery:** After `/compact`, the LLM re-reads the iMessage section and sends a confirmation via `notify.sh` if phone mode was active.
 - **Simplified instructions:** The CLAUDE.md and SKILL.md sections were rewritten to be shorter and more directive ("just switch") rather than conditional ("offer to switch if 3+ steps").
 
@@ -256,8 +394,6 @@ Additionally, Task agents (subprocesses launched for parallel research) run with
 | `notify.sh -f /tmp/file.txt 600 10` | Yes | Runs without prompt |
 | `echo "msg" \| notify.sh - 600 10` | No (starts with `echo`) | **Blocked — IDE prompt** |
 | `cat <<'EOF'\n...\nEOF \| notify.sh -` | No (multiline, starts with `cat`) | **Blocked — IDE prompt** |
-
-The LLM tends to send long, detailed approval messages that span multiple lines. Before the `-f` flag existed, the only way to send multiline messages was via piped stdin (`echo "..." | notify.sh -` or `cat <<EOF | notify.sh -`). Both patterns fail to match the whitelisted glob, causing the IDE to prompt — which blocks indefinitely when the user is away from the computer.
 
 **Solution: The `-f` flag.**
 
@@ -275,23 +411,48 @@ This completely bypasses the newline glob limitation. The Bash command is always
 **Problem Layers 1+2 didn't solve:** Even with correct LLM instructions and Bash whitelisting, non-Bash tools (Write, Edit, Read) still trigger IDE "Do you want to proceed?" prompts. When the user is on their phone, nobody is there to click "Allow," and the session blocks.
 
 **Solution:**
+
+```mermaid
+flowchart LR
+    TOOL["Claude tool call<br/>(Write, Edit, Read)"] --> PERM["IDE permission check"]
+    PERM --> HOOK["permission_gate.sh"]
+    HOOK --> CHECK{"Phone mode<br/>flag exists?"}
+    CHECK -->|No| IDE["Show IDE prompt<br/>(normal behavior)"]
+    CHECK -->|Yes| STALE{"Flag older<br/>than 4 hours?"}
+    STALE -->|Yes| EXPIRE["Delete stale flag"] --> IDE
+    STALE -->|No| FMT["Format message<br/>for tool type"]
+    FMT --> SEND["notify.sh → iMessage"]
+    SEND --> WAIT{"Wait for reply"}
+    WAIT -->|"YES/Y"| ALLOW["Return: allow"]
+    WAIT -->|"NO/N"| DENY["Return: deny"]
+    WAIT -->|Timeout| DENY2["Exit 2: deny"]
+    WAIT -->|Send failed| IDE
+```
+
 - The installer configures a `PermissionRequest` hook in `~/.claude/settings.json`
 - When a permission prompt would appear, `permission_gate.sh` runs and checks for a phone mode flag file (`/tmp/imessage-notify-phone-mode`)
 - If phone mode is **off**: exits silently, normal IDE prompt shows
 - If phone mode is **on**: formats a readable message (e.g., "Claude wants to: Write file: src/main.py (1523 chars). Allow? Reply YES or NO."), sends it via `notify.sh`, waits for the reply, and returns allow/deny to Claude Code
-- Stale flag prevention: flags older than 4 hours are auto-expired; `SessionEnd` and `SessionStart` hooks clean up flags on session lifecycle events
+- **Stale flag prevention**: flags older than 4 hours are auto-expired; `SessionEnd` and `SessionStart` hooks clean up flags on session lifecycle events
+- **Graceful degradation**: if `notify.sh` fails (Messages not running, RECIPIENT not configured), the hook falls through to the normal IDE prompt instead of blocking
 
 ### All Three Layers Must Be Configured
 
 The `install.sh` script configures all layers:
-- **Layer 1:** Appends the iMessage instructions block to `~/.claude/CLAUDE.md`
-- **Layer 2:** Runs `whitelist_commands.sh` to inject permission patterns into `~/.claude/settings.json` and the repo's `.claude/settings.local.json`
-- **Layer 3:** Injects `PermissionRequest`, `SessionEnd`, and `SessionStart` hooks into `~/.claude/settings.json`
+
+| Layer | What it configures | Where |
+|-------|-------------------|-------|
+| **Layer 1** | iMessage instructions block | `~/.claude/CLAUDE.md` |
+| **Layer 2** | Permission patterns (`Bash(*)`, script globs) | `~/.claude/settings.json` + repo `.claude/settings.local.json` |
+| **Layer 3** | PermissionRequest, SessionEnd, SessionStart hooks | `~/.claude/settings.json` |
 
 If any layer is missing, phone mode will partially fail:
-- Layer 1 only → LLM tries to use iMessage but commands aren't whitelisted and non-Bash tools block at IDE prompts
-- Layer 2 only → Commands are whitelisted but the LLM never uses iMessage (stays in IDE mode)
-- Layers 1+2, no Layer 3 → LLM uses iMessage for communication, Bash commands auto-approved, but Write/Edit/Read still trigger IDE prompts
+
+| Missing Layer | Symptom |
+|---------------|---------|
+| Layer 1 only | Commands whitelisted + hooks configured, but LLM never uses iMessage (stays in IDE mode) |
+| Layer 2 only | LLM tries iMessage but every Bash command triggers IDE prompt |
+| Layer 3 only | LLM uses iMessage, Bash auto-approved, but Write/Edit/Read block at IDE prompts |
 
 ### Remaining Limitations
 
@@ -300,6 +461,8 @@ If any layer is missing, phone mode will partially fail:
 2. **Context window pressure.** Even with simplified instructions, an extremely long session with many tool outputs can push the iMessage instructions far enough back that the LLM deprioritizes them. The post-compaction recovery rule mitigates this but does not eliminate it entirely.
 
 3. **Single phone mode session.** Only one Claude Code session can be in phone mode at a time (single global flag file). This is acceptable since phone mode implies "user is on their phone," which is a user-level state, not per-session.
+
+---
 
 ## Troubleshooting
 
@@ -339,6 +502,8 @@ Use file mode instead of stdin/heredoc:
 
 The glob wildcard `*` in the whitelisted pattern does not match newlines, so piped multiline commands will always trigger prompts. The `-f` flag avoids this by keeping the command on a single line.
 
+---
+
 ## Development
 
 ### Run tests
@@ -350,6 +515,8 @@ uv run pytest -m "not integration"
 ```bash
 uv run pytest -m integration
 ```
+
+---
 
 ## Documentation
 
