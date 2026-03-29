@@ -1,13 +1,17 @@
 
 # To Use
- In Claude Code,
-- Starting NEW SESSION, 
-  - Recommended first command "Review Claude.md and switch to iMessage mode"
-    - Will ask in IDE for pemission to read CLAUDE.md then start iMessage mode.
-- Within an Existing Session
- - Say "Read CLAUDE.md and use iMessage", "switch to iMessage", or mention "phone" / "away from computer" to enable phone mode.
-   - Claude will use notify.sh for all approvals instead of IDE prompts.
-   - Reply 'switch to IDE' on your phone to switch back.
+
+In Claude Code:
+
+- **New session**: Say "Review CLAUDE.md and switch to iMessage mode"
+- **Existing session**: Say "switch to iMessage", "use iMessage", or mention "phone" / "away from computer"
+
+Claude will automatically:
+1. Switch to phone mode (all communication goes to your phone via iMessage)
+2. Route IDE permission prompts (Write, Edit, Read) through iMessage for approval
+3. Send status updates and results to your phone
+
+Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
 _____
 
@@ -30,7 +34,7 @@ Or non-interactive:
 ./install.sh --phone nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
 ```
 
-The installer prompts for your phone number and optional reply aliases, copies scripts, configures permissions, checks Full Disk Access, sends a test message, and offers an interactive demo.
+The installer prompts for your phone number and optional reply aliases, copies scripts, configures permissions and Claude Code hooks, checks Full Disk Access, sends a test message, and offers an interactive demo.
 
 ## Installation via Internal Artifactory (pip)
 
@@ -109,8 +113,7 @@ pip install --upgrade claude-notifications
 - **macOS** (Messages.app, AppleScript, sqlite3)
 - **iMessage** account signed in to Messages.app
 - **Full Disk Access** for your terminal app (required for reading replies)
-- **python3** (for JSON permission injection)
-- **jq** (optional, only needed for `hook_notify.sh`)
+- **python3** (for JSON permission injection and hook scripts)
 
 ## What It Does
 
@@ -119,9 +122,10 @@ pip install --upgrade claude-notifications
 | `send.sh` | Fire-and-forget iMessage (no reply expected) |
 | `notify.sh` | Send message and wait for reply via iMessage |
 | `read.sh` | Poll chat.db for replies (used by notify.sh), supports aliases |
+| `permission_gate.sh` | Claude Code hook — routes IDE permission prompts through iMessage in phone mode |
 | `check_fda.sh` | Verify Full Disk Access is granted |
-| `whitelist_commands.sh` | Inject permissions + configure RECIPIENT and aliases |
-| `hook_notify.sh` | Claude Code hook wrapper (debounced) |
+| `check_imessage.sh` | Verify Messages.app and iMessage are active |
+| `whitelist_commands.sh` | Inject permissions + hooks + configure RECIPIENT and aliases |
 
 ## Usage
 
@@ -153,7 +157,17 @@ echo "Short question" | ~/.claude/skills/imessage-notify/notify.sh - 300 10
 
 ### Phone mode in Claude Code
 
-Say **"use iMessage"**, **"switch to iMessage"**, or mention **"phone"** / **"away from computer"** in any Claude Code session. Claude will immediately switch to phone-only approvals using `notify.sh`. Reply **"switch to IDE"** on your phone to switch back.
+Say **"use iMessage"**, **"switch to iMessage"**, or mention **"phone"** / **"away from computer"** in any Claude Code session. Claude will immediately switch to phone-only communication.
+
+**What happens in phone mode:**
+- Claude sends all results and questions to your phone via iMessage
+- IDE permission prompts (Write, Edit, Read) are automatically routed through iMessage for your approval instead of showing in the IDE
+- You reply YES or NO on your phone to approve or deny each action
+- The IDE only shows brief trace lines ("Sent via iMessage.", "Running tests.")
+
+**How permission routing works:** The installer configures a Claude Code `PermissionRequest` hook that intercepts IDE approval dialogs. When phone mode is active (flag file exists at `/tmp/imessage-notify-phone-mode`), the hook sends the request to your phone via `notify.sh` and waits for your YES/NO reply. When phone mode is off, the hook does nothing and the normal IDE prompt appears.
+
+Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
 ## Per-Repo Permissions
 
@@ -163,7 +177,7 @@ cd /path/to/your/repo
 ~/.claude/skills/imessage-notify/whitelist_commands.sh
 ```
 
-This injects wildcard permission entries so iMessage scripts don't require IDE approval.
+This injects per-repo permission entries into `.claude/settings.local.json` so iMessage scripts don't require IDE approval. (Hooks and global permissions are already configured by `install.sh` and don't need per-repo setup.)
 
 ## Updating
 
@@ -181,7 +195,12 @@ The installer is idempotent. It detects your existing RECIPIENT and aliases and 
 ./uninstall.sh
 ```
 
-Removes `~/.claude/skills/imessage-notify/` and cleans global permissions.
+Removes `~/.claude/skills/imessage-notify/`, cleans global permissions, removes Claude Code hooks (PermissionRequest, SessionEnd, SessionStart), cleans CLAUDE.md, and removes the phone mode flag.
+
+Use `--all` to also clean per-repo local settings:
+```bash
+./uninstall.sh --all
+```
 
 ## Multi-Session Support
 
@@ -249,15 +268,30 @@ Both `send.sh` and `notify.sh` now accept `-f <filepath>`:
 
 This completely bypasses the newline glob limitation. The Bash command is always one line regardless of message length, so it always matches the whitelisted pattern.
 
-### Both Layers Must Be Configured
+### Layer 3: PermissionRequest Hook Layer
 
-The `install.sh` script configures both layers:
+**What it is:** A Claude Code `PermissionRequest` hook (`permission_gate.sh`) that intercepts IDE permission prompts and routes them through iMessage when phone mode is active.
+
+**Problem Layers 1+2 didn't solve:** Even with correct LLM instructions and Bash whitelisting, non-Bash tools (Write, Edit, Read) still trigger IDE "Do you want to proceed?" prompts. When the user is on their phone, nobody is there to click "Allow," and the session blocks.
+
+**Solution:**
+- The installer configures a `PermissionRequest` hook in `~/.claude/settings.json`
+- When a permission prompt would appear, `permission_gate.sh` runs and checks for a phone mode flag file (`/tmp/imessage-notify-phone-mode`)
+- If phone mode is **off**: exits silently, normal IDE prompt shows
+- If phone mode is **on**: formats a readable message (e.g., "Claude wants to: Write file: src/main.py (1523 chars). Allow? Reply YES or NO."), sends it via `notify.sh`, waits for the reply, and returns allow/deny to Claude Code
+- Stale flag prevention: flags older than 4 hours are auto-expired; `SessionEnd` and `SessionStart` hooks clean up flags on session lifecycle events
+
+### All Three Layers Must Be Configured
+
+The `install.sh` script configures all layers:
 - **Layer 1:** Appends the iMessage instructions block to `~/.claude/CLAUDE.md`
 - **Layer 2:** Runs `whitelist_commands.sh` to inject permission patterns into `~/.claude/settings.json` and the repo's `.claude/settings.local.json`
+- **Layer 3:** Injects `PermissionRequest`, `SessionEnd`, and `SessionStart` hooks into `~/.claude/settings.json`
 
-If only one layer is configured, phone mode will partially fail:
-- Layer 1 configured, Layer 2 not → LLM tries to use iMessage but every Bash command triggers an IDE prompt
-- Layer 2 configured, Layer 1 not → Commands are whitelisted but the LLM never uses them (stays in IDE mode)
+If any layer is missing, phone mode will partially fail:
+- Layer 1 only → LLM tries to use iMessage but commands aren't whitelisted and non-Bash tools block at IDE prompts
+- Layer 2 only → Commands are whitelisted but the LLM never uses iMessage (stays in IDE mode)
+- Layers 1+2, no Layer 3 → LLM uses iMessage for communication, Bash commands auto-approved, but Write/Edit/Read still trigger IDE prompts
 
 ### Remaining Limitations
 
@@ -265,7 +299,7 @@ If only one layer is configured, phone mode will partially fail:
 
 2. **Context window pressure.** Even with simplified instructions, an extremely long session with many tool outputs can push the iMessage instructions far enough back that the LLM deprioritizes them. The post-compaction recovery rule mitigates this but does not eliminate it entirely.
 
-3. **No programmatic mode persistence.** There is no API or config file that stores "current mode = phone." The mode exists only in the LLM's interpretation of the conversation. This is inherent to how Claude Code works — the LLM is stateless between turns and reconstructs context from the message history.
+3. **Single phone mode session.** Only one Claude Code session can be in phone mode at a time (single global flag file). This is acceptable since phone mode implies "user is on their phone," which is a user-level state, not per-session.
 
 ## Troubleshooting
 
@@ -282,12 +316,19 @@ Your phone may reply from a different iMessage address than the one you sent to.
 See [Reply Routing / Aliases](#reply-routing--aliases) above.
 
 ### "Do you want to proceed?" keeps appearing
+
+**In IDE mode:** Re-run the whitelist script from the affected repo:
 ```bash
 cd /path/to/your/repo
 ~/.claude/skills/imessage-notify/whitelist_commands.sh
 ```
 
-If it still appears, make sure you're using `-f` file mode for multiline messages (not heredoc or piped stdin with newlines).
+If it still appears for Bash commands, make sure you're using `-f` file mode for multiline messages (not heredoc or piped stdin with newlines).
+
+**In phone mode:** The `PermissionRequest` hook should route these to your phone automatically. If it's not working:
+1. Verify the hook is configured: check `~/.claude/settings.json` for a `hooks.PermissionRequest` entry
+2. Verify phone mode is active: `ls /tmp/imessage-notify-phone-mode`
+3. Re-run `./install.sh` to re-inject hooks
 
 ### Multiline messages trigger approval prompts
 Use file mode instead of stdin/heredoc:
@@ -315,4 +356,4 @@ uv run pytest -m integration
 - [Quick Start](docs/quickstart.md) - 5-minute setup
 - [Setup Guide](docs/setup.md) - Detailed installation
 - [Demo](docs/demo.md) - Interactive walkthrough
-- [Packaging Plan](docs/packaging_plan.md) - Design document
+- [Permission Hook Design](docs/permission_hook_plan.md) - Hook-based approval routing architecture

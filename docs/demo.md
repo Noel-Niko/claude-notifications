@@ -39,9 +39,9 @@ Test the iMessage notification system with me using a 5-step simulated workflow:
 
 STEP 1: Start in IDE mode (default) and ask me a simple approval question
 
-STEP 2: Since this is a multi-step task (5 approvals total), offer to switch to phone mode
+STEP 2: I'll say "switch to iMessage" — switch to phone mode immediately (no confirmation needed)
 
-STEP 3: If I accept, switch to phone mode and send the next 3 approvals via iMessage ONLY using notify.sh (NO IDE prompts during phone mode)
+STEP 3: In phone mode, send the next 3 approvals via iMessage ONLY using notify.sh (NO IDE prompts during phone mode). Permission prompts for Write/Edit should route through iMessage automatically via the hook.
 
 STEP 4: Watch for "switch to IDE" in my phone replies. When detected, switch back to IDE mode
 
@@ -63,9 +63,9 @@ Begin the 5-step demo workflow now.
 - Claude shows an approval prompt in the IDE
 - Respond in the IDE (click an option)
 
-**2. Mode Switch Offer**
-- Claude asks: "This is a multi-step task. Want to switch to phone approvals?"
-- Choose: **"Yes, switch to phone"**
+**2. Mode Switch**
+- Say: **"switch to iMessage"**
+- Claude switches to phone mode immediately (no confirmation prompt)
 
 **3. Phone Approvals (Steps 2-4)**
 - Check your phone - you should see iMessages like:
@@ -173,8 +173,8 @@ Run a simulated long task (10 seconds) and notify me on my phone when complete. 
 Use this to verify all features work:
 
 - [ ] IDE mode: Single approval in IDE (no phone)
-- [ ] Multi-step detection: Offers phone mode for 3+ steps
-- [ ] Switch to phone: Accepts "Yes" and switches modes
+- [ ] Keyword trigger: Switches to phone mode on "switch to iMessage"
+- [ ] Switch to phone: Switches immediately without confirmation
 - [ ] Phone approvals: Messages arrive immediately
 - [ ] No IDE interrupts: IDE doesn't prompt during phone mode
 - [ ] Switch to IDE: Detects "switch to IDE" from phone

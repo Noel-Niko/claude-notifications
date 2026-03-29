@@ -4,9 +4,10 @@
 # What it does:
 #   1. Removes ~/.claude/skills/imessage-notify/ directory
 #   2. Removes iMessage permission entries from ~/.claude/settings.json (global)
+#   2b. Removes iMessage hooks from ~/.claude/settings.json (global)
 #   3. Removes installer blocks from ~/.claude/CLAUDE.md
 #   4. Removes claude-notifications/ entry from parent repo's .gitignore
-#   5. Removes runtime pending directory
+#   5. Removes runtime pending directory and phone mode flag
 #   6. Prints note about local repo settings (or cleans them with --all)
 #
 # Usage:
@@ -107,6 +108,73 @@ else
   echo "  - ${GLOBAL_SETTINGS} not found"
 fi
 
+# ─── Step 2b: Remove hooks from global settings ───
+if [[ -f "$GLOBAL_SETTINGS" ]]; then
+  echo ""
+  echo "Cleaning hooks from global settings: ${GLOBAL_SETTINGS}"
+
+  python3 -c "
+import json, sys
+
+settings_file = sys.argv[1]
+
+with open(settings_file, 'r') as f:
+    settings = json.load(f)
+
+if 'hooks' not in settings:
+    print('  No hooks section found')
+    sys.exit(0)
+
+hooks = settings['hooks']
+changed = False
+
+# Remove PermissionRequest hooks containing permission_gate.sh
+if 'PermissionRequest' in hooks:
+    before = len(hooks['PermissionRequest'])
+    hooks['PermissionRequest'] = [
+        entry for entry in hooks['PermissionRequest']
+        if not any(
+            'permission_gate.sh' in h.get('command', '')
+            for h in entry.get('hooks', [])
+        )
+    ]
+    if not hooks['PermissionRequest']:
+        del hooks['PermissionRequest']
+    if len(hooks.get('PermissionRequest', [])) < before:
+        changed = True
+
+# Remove SessionEnd/SessionStart cleanup hooks
+cleanup_cmd = 'rm -f /tmp/imessage-notify-phone-mode'
+for event in ('SessionEnd', 'SessionStart'):
+    if event in hooks:
+        before = len(hooks[event])
+        hooks[event] = [
+            entry for entry in hooks[event]
+            if not any(
+                h.get('command', '') == cleanup_cmd
+                for h in entry.get('hooks', [])
+            )
+        ]
+        if not hooks[event]:
+            del hooks[event]
+        if len(hooks.get(event, [])) < before:
+            changed = True
+
+# Remove empty hooks section
+if not hooks:
+    del settings['hooks']
+    changed = True
+
+if changed:
+    with open(settings_file, 'w') as f:
+        json.dump(settings, f, indent=2)
+        f.write('\n')
+    print('  ✓ Removed iMessage hooks')
+else:
+    print('  No matching hooks found')
+" "$GLOBAL_SETTINGS"
+fi
+
 # ─── Step 3: Remove installer blocks from CLAUDE.md ───
 echo ""
 if [[ -f "$CLAUDE_MD" ]]; then
@@ -202,6 +270,12 @@ if [[ -d "$PENDING_DIR" ]]; then
   echo "  ✓ Removed pending directory: ${PENDING_DIR}"
 else
   echo "  - Pending directory not found (already clean)"
+fi
+
+PHONE_MODE_FLAG="/tmp/imessage-notify-phone-mode"
+if [[ -f "$PHONE_MODE_FLAG" ]]; then
+  rm -f "$PHONE_MODE_FLAG"
+  echo "  ✓ Removed phone mode flag: ${PHONE_MODE_FLAG}"
 fi
 
 # ─── Step 6: Local settings ───

@@ -19,10 +19,10 @@ The installer will:
 1. Check prerequisites (macOS, Messages.app, sqlite3, python3)
 2. Prompt for your phone number (or use `--phone`)
 3. Copy scripts to `~/.claude/skills/imessage-notify/`
-4. Configure permissions automatically
+4. Configure permissions and Claude Code hooks automatically
 5. Check Full Disk Access
 6. Send a verification test message
-7. Print CLAUDE.md snippet to copy
+7. Update `~/.claude/CLAUDE.md` with iMessage instructions
 
 ## Post-Install: Grant Full Disk Access
 

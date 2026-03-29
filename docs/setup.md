@@ -55,6 +55,7 @@ This single command:
 - Configures your phone number in both `send.sh` and `read.sh`
 - Injects wildcard permission entries into the repo's `.claude/settings.local.json`
 - Injects the same entries into the global `~/.claude/settings.json`
+- Configures Claude Code hooks (PermissionRequest, SessionEnd, SessionStart) in global settings
 - Ensures all skill scripts are executable
 
 **Accepted phone number formats** (all normalized to `+1XXXXXXXXXX`):
@@ -141,30 +142,27 @@ If both tests work, setup is complete!
 
 ### CLAUDE.md Integration
 
-The installer prints a CLAUDE.md snippet at the end. Copy it to your `~/.claude/CLAUDE.md`.
+The installer automatically updates `~/.claude/CLAUDE.md` with the iMessage instructions block. No manual copying needed.
 
 ### How It Works in Practice
 
-**Single approvals** (default IDE mode):
+**IDE mode** (default):
 ```
 Claude: "Ready to deploy. Proceed? [Yes/No]" (shows in IDE)
 You: Click "Yes" in IDE
 ```
 
-**Multi-step tasks** (offered phone mode):
+**Phone mode** (triggered by keywords):
 ```
-Claude: "This is a 5-step refactoring. Switch to phone approvals? [Yes/No]"
-You: "Yes"
-Claude: [sends all subsequent approvals via iMessage only]
-You: [reply from your phone, no IDE interruption]
+You: "switch to iMessage" or "I'm away from the computer"
+Claude: [immediately switches to phone mode — no confirmation needed]
+Claude: [sends all approvals via iMessage, permission prompts routed to phone]
+You: [reply from your phone, no IDE interaction needed]
 ```
 
-**Manual mode switching**:
+**Switch back**:
 ```
-You: "switch to iMessage"
-Claude: [switches to phone-only approvals]
-... later ...
-You: [text "switch to IDE" to your phone]
+You: [text "switch to IDE" on your phone]
 Claude: [switches back to IDE mode]
 ```
 

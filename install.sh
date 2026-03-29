@@ -140,13 +140,6 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 echo "  ✓ python3 available"
 
-# jq check (warning only — only needed for hook_notify.sh)
-if ! command -v jq >/dev/null 2>&1; then
-  echo "  ⚠ jq not found (optional — only needed for hook_notify.sh)"
-else
-  echo "  ✓ jq available (optional)"
-fi
-
 # Source scripts check
 if [[ ! -d "$SRC_DIR" ]]; then
   echo "ERROR: Source scripts not found at ${SRC_DIR}" >&2
@@ -477,26 +470,9 @@ echo "════════════════════════�
 echo "  Installation complete!"
 echo "════════════════════════════════════════════════════════"
 echo ""
-echo "Optional: To enable automatic hook notifications, add this to"
-echo "your ~/.claude/settings.json under \"hooks\":"
-echo ""
-cat <<'HOOKSNIPPET'
-{
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/skills/imessage-notify/hook_notify.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKSNIPPET
+echo "Hooks configured automatically in ~/.claude/settings.json:"
+echo "  • PermissionRequest → routes approval prompts through iMessage in phone mode"
+echo "  • SessionStart/SessionEnd → cleans up phone mode flag on session lifecycle"
 echo ""
 echo "To update later: git pull && ./install.sh"
 echo ""
