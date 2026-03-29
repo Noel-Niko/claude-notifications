@@ -418,26 +418,30 @@ MARKER="## iMessage Notifications (MANDATORY)"
 
 IMESSAGE_BLOCK='## iMessage Notifications (MANDATORY)
 
+**CRITICAL — Read `~/.claude/skills/imessage-notify/SKILL.md` BEFORE producing any output.** This file defines the full communication protocol. If you skip it, you will use the wrong output channel and the user will not see your work. If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh` and relay setup instructions.
+
 **Two modes:** IDE mode (default) and Phone mode.
 
 **Automatic phone mode triggers — no confirmation needed:**
-If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, **immediately switch to phone mode**. Do not ask for confirmation. Do not offer — just switch.
+If the user mentions "iMessage", "phone", "away from computer", or "away from the compute" anywhere in their message, **immediately switch to phone mode**. Do not ask for confirmation. Do not offer — just switch. Also switch if the user'\''s message contains contextual signals: `install.sh` output, phone demo replies, or references to the iMessage system being set up. When in doubt, switch — a false positive (one iMessage) costs less than a false negative (invisible IDE output).
 
 **Manual switches:**
 - User says "switch to iMessage" → phone mode immediately
 - User texts "switch to IDE" (via iMessage reply) → IDE mode immediately
 
-**After /compact:** Re-read this section. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
+**After /compact:** Re-read this section and SKILL.md. If you were in phone mode before compaction, send a confirmation via `notify.sh`: "Session compacted. Still in phone mode. Reply OK to confirm." If no reply context exists, default to IDE mode.
 
 **IDE mode behavior:**
 - Use `AskUserQuestion` or `ExitPlanMode` for approvals
 - Optionally use `send.sh` for fire-and-forget status updates
 
-**Phone mode behavior:**
+**Phone mode behavior — IDE is NOT a communication channel:**
 - Use `notify.sh` for ALL approvals — never show IDE prompts
 - Use `send.sh` for fire-and-forget status updates
 - Check every reply for "switch to IDE"
 - Include full context in messages (the user only sees their phone)
+- IDE text: ONLY brief trace lines ("Sent via iMessage.", "Running tests.")
+- Do NOT write summaries, tables, or reports to IDE in phone mode
 
 **Sending messages (IMPORTANT — use file mode for multiline):**
 - **Short single-line**: `~/.claude/skills/imessage-notify/notify.sh "Short msg" 600 10`
@@ -446,16 +450,20 @@ If the user mentions "iMessage", "phone", "away from computer", or "away from th
   2. Run: `~/.claude/skills/imessage-notify/notify.sh -f /tmp/imessage-notify-msg-{uuid}.txt 600 10`
   - The `-f` flag reads the file and deletes it after sending
   - This avoids CLI permission prompts that block multiline Bash commands
-- **Fire-and-forget**: Same patterns but with `send.sh` instead of `notify.sh`
-
-**Setup:**
-- Read `~/.claude/skills/imessage-notify/SKILL.md` for the full protocol on first use
-- If scripts fail, run `~/.claude/skills/imessage-notify/check_fda.sh` and relay setup instructions'
+- **Fire-and-forget**: Same patterns but with `send.sh` instead of `notify.sh`'
 
 if [[ -f "$CLAUDE_MD" ]] && grep -qF "$MARKER" "$CLAUDE_MD"; then
-  echo "  ✓ ~/.claude/CLAUDE.md already contains iMessage Notifications block"
+  # Delete from marker to EOF, then append the (possibly updated) block
+  # This works because the iMessage block is always the last content in the file.
+  LINE_NUM=$(grep -nF "$MARKER" "$CLAUDE_MD" | head -1 | cut -d: -f1)
+  # Keep everything before the marker (strip trailing blank lines)
+  head -n $(( LINE_NUM - 1 )) "$CLAUDE_MD" | perl -0777 -pe 's/\s+\z/\n/' > "${CLAUDE_MD}.tmp"
+  mv "${CLAUDE_MD}.tmp" "$CLAUDE_MD"
+  # Append updated block
+  printf '\n\n%s\n' "$IMESSAGE_BLOCK" >> "$CLAUDE_MD"
+  echo "  ✓ iMessage Notifications block updated in ~/.claude/CLAUDE.md"
 else
-  # Append with a blank line separator
+  # First install — append with a blank line separator
   if [[ -f "$CLAUDE_MD" ]] && [[ -s "$CLAUDE_MD" ]]; then
     printf '\n\n%s\n' "$IMESSAGE_BLOCK" >> "$CLAUDE_MD"
   else

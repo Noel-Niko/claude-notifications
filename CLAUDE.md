@@ -14,6 +14,7 @@ Integration tests (require Messages.app + iMessage) are skipped by default:
 uv run pytest -m integration
 ```
 
+
 ## Repo Layout
 
 - `src/imessage-notify/` — Source scripts (copied to `~/.claude/skills/imessage-notify/` by installer)

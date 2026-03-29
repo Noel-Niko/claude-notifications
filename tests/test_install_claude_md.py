@@ -205,10 +205,10 @@ class TestIMessageBlockAppend:
 class TestIMessageBlockIdempotent:
     """iMessage block is not duplicated on repeated runs."""
 
-    def test_skips_if_already_present(self, claude_md_sandbox):
+    def test_updates_if_already_present(self, claude_md_sandbox):
         run_step11(claude_md_sandbox)
         result = run_step11(claude_md_sandbox)
-        assert "already contains iMessage Notifications block" in result.stdout
+        assert "iMessage Notifications block updated" in result.stdout
 
     def test_single_occurrence(self, claude_md_sandbox):
         run_step11(claude_md_sandbox)
@@ -296,4 +296,4 @@ class TestOutputMessages:
         run_step11(claude_md_sandbox)
         result = run_step11(claude_md_sandbox)
         assert "already contains post-compact rule" in result.stdout
-        assert "already contains iMessage Notifications block" in result.stdout
+        assert "iMessage Notifications block updated" in result.stdout
