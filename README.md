@@ -2,6 +2,12 @@
 
 iMessage notifications for Claude Code. Send messages to your phone, get approvals via iMessage, and switch between IDE and phone approval modes dynamically.
 
+## Warning - May need still need to yell at Claude a few times
+<img width="400" height="283" alt="image" src="https://github.com/user-attachments/assets/ef90a999-ce8b-458a-a39b-589dec246fca" />
+
+<img width="806" height="29" alt="image" src="https://github.com/user-attachments/assets/48b51275-1db3-43bb-9411-e1639b7f76a1" />
+
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
