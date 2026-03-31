@@ -2,11 +2,9 @@
 
 iMessage notifications for Claude Code. Send messages to your phone, get approvals via iMessage, and switch between IDE and phone approval modes dynamically.
 
-## Warning - May need still need to yell at Claude a few times
-<img width="400" height="283" alt="image" src="https://github.com/user-attachments/assets/ef90a999-ce8b-458a-a39b-589dec246fca" />
-
-<img width="806" height="29" alt="image" src="https://github.com/user-attachments/assets/48b51275-1db3-43bb-9411-e1639b7f76a1" />
-
+## Warning - May still need to yell at Claude a few times
+![dreamstime_s_16944049.jpg](docs/dreamstime_s_16944049.jpg)
+![confession.jpg](docs/confession.jpg)
 
 ## Table of Contents
 
@@ -77,7 +75,8 @@ Or non-interactive:
 ```bash
 ./install.sh --phone +15551234567
 ./install.sh --phone your.email@icloud.com
-./install.sh --phone nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+./install.sh --phone your.email@icloud.com --aliases "+15551234567 other@example.com"
+./install.sh --help
 ```
 
 The installer prompts for your phone number and optional reply aliases, copies scripts, configures permissions and Claude Code hooks, checks Full Disk Access, sends a test message, and offers an interactive demo.
@@ -165,6 +164,8 @@ pip install --upgrade claude-notifications
 - **iMessage** account signed in to Messages.app
 - **Full Disk Access** for your terminal app (required for reading replies)
 - **python3** (for JSON permission injection and hook scripts)
+- **uuidgen** (for generating unique request IDs; pre-installed on macOS)
+- **jq** (optional — used by `hook_notify.sh` for JSON parsing; hooks degrade gracefully without it)
 
 ---
 
@@ -179,6 +180,7 @@ pip install --upgrade claude-notifications
 ├── check_fda.sh            # Verify Full Disk Access
 ├── check_imessage.sh       # Verify Messages.app + iMessage
 ├── whitelist_commands.sh    # Inject permissions + hooks + configure recipient
+├── hook_notify.sh          # Hook wrapper: debounced fire-and-forget notifications
 └── SKILL.md                # Instructions Claude Code reads for the protocol
 ```
 
@@ -191,6 +193,7 @@ pip install --upgrade claude-notifications
 | `check_fda.sh` | Verify Full Disk Access is granted |
 | `check_imessage.sh` | Verify Messages.app and iMessage are active |
 | `whitelist_commands.sh` | Inject permissions + hooks + configure RECIPIENT and aliases |
+| `hook_notify.sh` | Claude Code hook wrapper — debounced fire-and-forget iMessage when user attention is needed |
 
 ---
 
@@ -216,7 +219,7 @@ reply=$(~/.claude/skills/imessage-notify/notify.sh "Deploy to staging? Reply YES
 # The -f flag reads the file and deletes it after sending.
 ```
 
-Stdin mode also works for simple cases:
+Stdin mode also works for simple cases, but note that piped commands won't match the whitelisted `notify.sh *` glob pattern, so they will trigger IDE approval prompts:
 ```bash
 echo "Short message" | ~/.claude/skills/imessage-notify/send.sh -
 echo "Short question" | ~/.claude/skills/imessage-notify/notify.sh - 300 10
@@ -292,7 +295,7 @@ The installer is idempotent. It detects your existing RECIPIENT and aliases and 
 ./uninstall.sh
 ```
 
-Removes `~/.claude/skills/imessage-notify/`, cleans global permissions, removes Claude Code hooks (PermissionRequest, SessionEnd, SessionStart), cleans CLAUDE.md, and removes the phone mode flag.
+Removes `~/.claude/skills/imessage-notify/`, cleans global permissions, removes Claude Code hooks (PermissionRequest, SessionEnd, SessionStart), cleans CLAUDE.md, cleans parent `.gitignore`, and removes the phone mode flag and pending request files.
 
 Use `--all` to also clean per-repo local settings:
 ```bash
@@ -328,7 +331,7 @@ flowchart LR
 
 ## Reply Routing / Aliases
 
-When you send to an email address (e.g., `nnosse@wgu.edu`), your phone may reply from a different iMessage identity (e.g., your phone number `+13522339160`). macOS puts that reply in a separate chat, so `read.sh` won't find it unless it knows about all your identities.
+When you send to an email address (e.g., `you@example.com`), your phone may reply from a different iMessage identity (e.g., your phone number `+15551234567`). macOS puts that reply in a separate chat, so `read.sh` won't find it unless it knows about all your identities.
 
 **Configure during install:**
 ```bash
@@ -339,7 +342,7 @@ When you send to an email address (e.g., `nnosse@wgu.edu`), your phone may reply
 
 **Configure manually:**
 ```bash
-~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+~/.claude/skills/imessage-notify/whitelist_commands.sh you@example.com --aliases "+15551234567 other@example.com"
 ```
 
 **Find your identities:** Open Messages.app → Settings → iMessage → "You can be reached for messages at."
@@ -487,7 +490,7 @@ If any layer is missing, phone mode will partially fail:
 ### Replies not detected / TIMEOUT
 Your phone may reply from a different iMessage address than the one you sent to. Configure aliases so `read.sh` checks all your identities:
 ```bash
-~/.claude/skills/imessage-notify/whitelist_commands.sh nnosse@wgu.edu --aliases "+13522339160 noelnosse@gmail.com"
+~/.claude/skills/imessage-notify/whitelist_commands.sh you@example.com --aliases "+15551234567 other@example.com"
 ```
 See [Reply Routing / Aliases](#reply-routing--aliases) above.
 
@@ -537,3 +540,7 @@ uv run pytest -m integration
 - [Setup Guide](docs/setup.md) - Detailed installation
 - [Demo](docs/demo.md) - Interactive walkthrough
 - [Permission Hook Design](docs/permission_hook_plan.md) - Hook-based approval routing architecture
+- [Alias Routing](docs/alias_routing_plan.md) - Multi-identity iMessage routing
+- [iMessage Check](docs/check_imessage_plan.md) - iMessage verification strategy
+- [Packaging](docs/packaging_plan.md) - Distribution and packaging details
+- [Uninstall](docs/uninstall_plan.md) - Uninstall strategy and cleanup
