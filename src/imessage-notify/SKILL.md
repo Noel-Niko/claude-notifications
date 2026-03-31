@@ -169,6 +169,8 @@ Messages are auto-tagged with the repo name and request ID:
 ~/.claude/skills/imessage-notify/read.sh <sent_epoch> [timeout_seconds] [poll_interval_seconds] [req_id]
 ```
 
+`read.sh` delegates the database query to `query_messages.py`, which decodes the `attributedBody` column (Apple typedstream format) when the `text` column is NULL. This handles macOS Sequoia's inconsistent message storage transparently.
+
 ## Background Execution (IMPORTANT)
 
 **Always use `Bash(run_in_background=true)` for notify.sh — NEVER spawn a Task sub-agent.**

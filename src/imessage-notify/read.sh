@@ -90,19 +90,9 @@ elapsed=0
 while [ "$elapsed" -lt "$TIMEOUT" ]; do
     # Query all inbound messages after our sent timestamp
     # Returns: rowid|text (one per line)
+    # Uses Python helper to decode attributedBody when text is NULL (macOS Sequoia)
     recipient_sql="$(build_recipient_sql)"
-    messages="$(sqlite3 "$DB" "
-        SELECT m.ROWID, m.text
-        FROM message m
-        JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
-        JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE c.chat_identifier IN (${recipient_sql})
-          AND m.date > ${apple_ts}
-          AND (m.is_from_me = 0 OR m.text NOT LIKE '[%|REQ-%]%')
-          AND m.text IS NOT NULL
-          AND m.text != ''
-        ORDER BY m.date ASC;
-    " 2>/dev/null || true)"
+    messages="$(python3 "${SCRIPT_DIR}/query_messages.py" "$DB" "$recipient_sql" "$apple_ts" 2>/dev/null || true)"
 
     if [ -n "$messages" ]; then
         # Priority 1: Look for a reply explicitly containing our request ID
