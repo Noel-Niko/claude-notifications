@@ -662,7 +662,11 @@ def create_chat_db(db_path, messages, recipient="+13522339160"):
     conn.execute("INSERT INTO chat VALUES (1, ?)", (recipient,))
 
     for msg in messages:
-        blob = bytes.fromhex(msg["attributed_body_hex"]) if msg.get("attributed_body_hex") else None
+        blob = (
+            bytes.fromhex(msg["attributed_body_hex"])
+            if msg.get("attributed_body_hex")
+            else None
+        )
         conn.execute(
             "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
             (msg["rowid"], msg.get("text"), blob, msg["date"], msg["is_from_me"]),

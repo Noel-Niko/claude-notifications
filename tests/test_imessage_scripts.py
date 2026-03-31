@@ -988,4 +988,6 @@ class TestAttributedBodyFallback:
         for line in lines:
             parts = line.split("|", 1)
             assert len(parts) == 2, f"Expected rowid|text format, got: {line}"
-            assert parts[0].strip().isdigit(), f"First field should be numeric rowid: {line}"
+            assert parts[0].strip().isdigit(), (
+                f"First field should be numeric rowid: {line}"
+            )
