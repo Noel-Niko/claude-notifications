@@ -485,44 +485,34 @@ class TestReadReplyMatching:
 
 
 class TestReadIsFromMeFix:
-    """Verify read.sh handles self-replies where is_from_me = 1.
+    """Verify query_messages.py handles self-replies where is_from_me = 1.
 
     macOS iMessage marks ~6% of self-conversation replies as is_from_me = 1
-    instead of 0. The fix uses the Claude tag pattern [repo|REQ-xxx] to
-    distinguish Claude's outbound messages from user replies, rather than
-    relying solely on is_from_me.
+    instead of 0. The fix uses the Claude tag pattern [repo|REQ-xxx] regex
+    to distinguish Claude's outbound messages from user replies, rather than
+    relying solely on is_from_me. The filter is applied in Python after
+    decoding both text and attributedBody columns.
     """
 
-    def test_query_does_not_use_bare_is_from_me_zero(self):
-        """The SQL query must NOT have a bare 'is_from_me = 0' filter."""
-        content = (SKILL_DIR / "read.sh").read_text()
-        # Should not have standalone is_from_me = 0 (without OR clause)
-        # The fix wraps it: (m.is_from_me = 0 OR m.text NOT LIKE ...)
-        assert "AND m.is_from_me = 0\n" not in content
+    def test_filter_uses_claude_tag_regex(self):
+        """query_messages.py uses regex to filter [repo|REQ-xxx] tagged messages."""
+        content = (SKILL_DIR / "query_messages.py").read_text()
+        assert "REQ-" in content
+        assert "is_from_me" in content
 
-    def test_query_uses_or_clause_for_is_from_me(self):
-        """The SQL query includes OR clause to catch is_from_me=1 user replies."""
+    def test_read_sh_delegates_to_query_messages(self):
+        """read.sh calls query_messages.py instead of inline SQL."""
         content = (SKILL_DIR / "read.sh").read_text()
-        assert "m.is_from_me = 0 OR m.text NOT LIKE" in content
-
-    def test_query_filters_claude_tagged_messages(self):
-        """The NOT LIKE pattern excludes Claude-tagged [repo|REQ-xxx] messages."""
-        content = (SKILL_DIR / "read.sh").read_text()
-        assert "NOT LIKE '[%|REQ-%]%'" in content
-
-    def test_is_from_me_zero_still_included(self):
-        """Messages with is_from_me=0 are always included (backward compat)."""
-        content = (SKILL_DIR / "read.sh").read_text()
-        assert "m.is_from_me = 0" in content
+        assert "query_messages.py" in content
 
     def test_tag_pattern_matches_send_format(self):
-        """The LIKE pattern must match the tag format from send.sh."""
+        """The regex pattern must match the tag format from send.sh."""
         send_content = (SKILL_DIR / "send.sh").read_text()
-        read_content = (SKILL_DIR / "read.sh").read_text()
+        query_content = (SKILL_DIR / "query_messages.py").read_text()
         # send.sh tags: [${repo_name}|REQ-${req_id}]
         assert "[${repo_name}|REQ-${req_id}]" in send_content
-        # read.sh filters: NOT LIKE '[%|REQ-%]%'
-        assert "NOT LIKE '[%|REQ-%]%'" in read_content
+        # query_messages.py filters with regex matching [repo|REQ-hexid]
+        assert r"\[.+\|REQ-[0-9a-f]+\]" in query_content
 
     def test_like_pattern_matches_tagged_messages(self):
         """Verify the SQL LIKE pattern correctly matches tagged messages."""
@@ -829,10 +819,13 @@ class TestReadRecipientAliases:
         assert output == "'o''brien@example.com'"
 
     def test_sql_in_clause_used_in_query(self):
-        """The SQL query uses IN (build_recipient_sql) not = RECIPIENT."""
-        content = (SKILL_DIR / "read.sh").read_text()
-        assert "chat_identifier IN" in content
-        assert "build_recipient_sql" in content
+        """The SQL query uses IN clause and read.sh passes build_recipient_sql output."""
+        read_content = (SKILL_DIR / "read.sh").read_text()
+        query_content = (SKILL_DIR / "query_messages.py").read_text()
+        # read.sh still uses build_recipient_sql to generate the SQL IN values
+        assert "build_recipient_sql" in read_content
+        # query_messages.py uses chat_identifier IN (...)
+        assert "chat_identifier IN" in query_content
 
 
 def _extract_function(script_content, func_name):
@@ -853,3 +846,148 @@ def _extract_function(script_content, func_name):
                 break
 
     return "\n".join(result)
+
+
+# =============================================================================
+# query_messages.py — attributedBody fallback (typedstream decoding)
+# =============================================================================
+
+
+class TestAttributedBodyFallback:
+    """Verify query_messages.py decodes attributedBody when text is NULL.
+
+    macOS Sequoia stores some iMessage content in attributedBody (typedstream
+    blob) instead of the text column. These tests verify the extraction logic
+    and the query behavior that falls back to attributedBody.
+    """
+
+    def test_extract_text_from_typedstream_valid(self):
+        """Extraction function returns correct text from a real typedstream blob."""
+        from conftest import TYPEDSTREAM_BLOBS, load_query_messages_module
+
+        mod = load_query_messages_module()
+        blob = bytes.fromhex(TYPEDSTREAM_BLOBS["short_user_reply"]["hex"])
+        result = mod.extract_text_from_typedstream(blob)
+        assert result == "Yes"
+
+    def test_extract_text_from_typedstream_with_leading_control_chars(self):
+        """Extraction strips leading control characters (0x00-0x1f)."""
+        from conftest import TYPEDSTREAM_BLOBS, load_query_messages_module
+
+        mod = load_query_messages_module()
+        blob = bytes.fromhex(TYPEDSTREAM_BLOBS["user_reply_control_chars"]["hex"])
+        result = mod.extract_text_from_typedstream(blob)
+        assert result is not None
+        # Should not start with control characters
+        assert ord(result[0]) >= 0x20, f"Starts with control char: {repr(result[:5])}"
+        assert result.startswith("I added the Genesis client ID")
+
+    def test_extract_text_from_typedstream_empty_blob(self):
+        """Returns None for empty or None blob."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        assert mod.extract_text_from_typedstream(None) is None
+        assert mod.extract_text_from_typedstream(b"") is None
+
+    def test_extract_text_from_typedstream_no_nsstring_marker(self):
+        """Returns None for blobs without NSString marker."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        assert mod.extract_text_from_typedstream(b"not a valid typedstream") is None
+
+    def test_query_prefers_text_over_attributed_body(self, chat_db):
+        """When both text and attributedBody exist, text column wins."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        rows = mod.query_messages(
+            str(chat_db["db_path"]),
+            f"'{chat_db['recipient']}'",
+            chat_db["apple_ts"],
+        )
+        # Message 5 has both text="Text wins over blob" and a blob
+        row5 = [r for r in rows if r[0] == 5]
+        assert len(row5) == 1
+        assert row5[0][1] == "Text wins over blob"
+
+    def test_query_recovers_text_from_attributed_body(self, chat_db):
+        """NULL text + valid attributedBody blob returns decoded text."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        rows = mod.query_messages(
+            str(chat_db["db_path"]),
+            f"'{chat_db['recipient']}'",
+            chat_db["apple_ts"],
+        )
+        # Message 2 has NULL text but attributedBody with "Yes"
+        row2 = [r for r in rows if r[0] == 2]
+        assert len(row2) == 1
+        assert row2[0][1] == "Yes"
+
+    def test_query_skips_null_text_null_blob(self, chat_db):
+        """Both text and attributedBody NULL means row is excluded."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        rows = mod.query_messages(
+            str(chat_db["db_path"]),
+            f"'{chat_db['recipient']}'",
+            chat_db["apple_ts"],
+        )
+        # Message 6 has neither text nor blob
+        row6 = [r for r in rows if r[0] == 6]
+        assert len(row6) == 0
+
+    def test_query_filters_claude_tagged_from_blob(self, chat_db):
+        """is_from_me=1 + Claude-tagged blob text is excluded."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        rows = mod.query_messages(
+            str(chat_db["db_path"]),
+            f"'{chat_db['recipient']}'",
+            chat_db["apple_ts"],
+        )
+        # Message 3: is_from_me=1, Claude-tagged [repo|REQ-xxx]
+        row3 = [r for r in rows if r[0] == 3]
+        assert len(row3) == 0, "Claude-tagged blob message should be filtered out"
+
+    def test_query_passes_untagged_from_blob(self, chat_db):
+        """is_from_me=1 + untagged blob text is included (6% self-reply fix)."""
+        from conftest import load_query_messages_module
+
+        mod = load_query_messages_module()
+        rows = mod.query_messages(
+            str(chat_db["db_path"]),
+            f"'{chat_db['recipient']}'",
+            chat_db["apple_ts"],
+        )
+        # Message 4: is_from_me=1, untagged self-reply
+        row4 = [r for r in rows if r[0] == 4]
+        assert len(row4) == 1
+        assert row4[0][1].startswith("Hey baby I just arrived")
+
+    def test_query_output_format_matches_sqlite3(self, chat_db):
+        """CLI output format is rowid|text per line, matching sqlite3 pipe mode."""
+        result = subprocess.run(
+            [
+                "python3",
+                str(SKILL_DIR / "query_messages.py"),
+                str(chat_db["db_path"]),
+                f"'{chat_db['recipient']}'",
+                str(chat_db["apple_ts"]),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        lines = result.stdout.strip().split("\n")
+        for line in lines:
+            parts = line.split("|", 1)
+            assert len(parts) == 2, f"Expected rowid|text format, got: {line}"
+            assert parts[0].strip().isdigit(), (
+                f"First field should be numeric rowid: {line}"
+            )

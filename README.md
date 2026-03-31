@@ -59,6 +59,7 @@ Claude will automatically:
 
 Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
+
 ---
 
 ## Install
@@ -176,6 +177,7 @@ pip install --upgrade claude-notifications
 ├── send.sh                 # Fire-and-forget iMessage
 ├── notify.sh               # Send + wait for reply
 ├── read.sh                 # Poll chat.db for replies
+├── query_messages.py       # SQLite query + attributedBody decoder (used by read.sh)
 ├── permission_gate.sh      # Hook: route IDE prompts through iMessage
 ├── check_fda.sh            # Verify Full Disk Access
 ├── check_imessage.sh       # Verify Messages.app + iMessage
@@ -189,6 +191,7 @@ pip install --upgrade claude-notifications
 | `send.sh` | Fire-and-forget iMessage (no reply expected) |
 | `notify.sh` | Send message and wait for reply via iMessage |
 | `read.sh` | Poll chat.db for replies (used by notify.sh), supports aliases |
+| `query_messages.py` | SQLite query helper — decodes `attributedBody` blobs when `text` is NULL (macOS Sequoia) |
 | `permission_gate.sh` | Claude Code hook — routes IDE permission prompts through iMessage in phone mode |
 | `check_fda.sh` | Verify Full Disk Access is granted |
 | `check_imessage.sh` | Verify Messages.app and iMessage are active |
@@ -470,6 +473,21 @@ If any layer is missing, phone mode will partially fail:
 | Layer 2 only | LLM tries iMessage but every Bash command triggers IDE prompt |
 | Layer 3 only | LLM uses iMessage, Bash auto-approved, but Write/Edit/Read block at IDE prompts |
 
+### Message Decoding: `read.sh` → `query_messages.py`
+
+On macOS Sequoia, iMessage inconsistently stores message content in the `attributedBody` column (a binary [typedstream](https://en.wikipedia.org/wiki/Typedstream) blob) instead of the `text` column. This affects both inbound user replies and outbound messages — roughly 30-100% of messages on Sequoia have `text = NULL`.
+
+`read.sh` delegates the database query to `query_messages.py`, which:
+
+1. Queries both `text` and `attributedBody` columns (no `text IS NOT NULL` filter)
+2. When `text` is NULL, decodes the typedstream blob by locating the `NSString` marker, reading a variable-length-encoded UTF-8 string, and stripping leading control characters
+3. Applies the `is_from_me` / Claude-tag filter on the **decoded** text (not the SQL column), fixing a bug where all blob-only `is_from_me=1` messages were silently dropped
+4. Outputs `rowid|text` lines — the same pipe-delimited format the rest of `read.sh` expects
+
+The typedstream length encoding uses `(indicator & 0x7F) + 1` bytes in little-endian order for strings longer than 127 bytes.
+
+See [attributedBody Fix ADR](docs/attributed_body_fix_plan.md) for the full decision record.
+
 ### Remaining Limitations
 
 1. **Task agents are stateless.** When the LLM launches parallel Task agents (subprocesses for research, exploration, etc.), those agents run with independent context. They cannot use iMessage and have no awareness of phone mode. Only the parent session uses phone mode; Task agents work silently and return results to the parent.
@@ -488,11 +506,14 @@ If any layer is missing, phone mode will partially fail:
 3. Test manually: `~/.claude/skills/imessage-notify/send.sh "test"`
 
 ### Replies not detected / TIMEOUT
-Your phone may reply from a different iMessage address than the one you sent to. Configure aliases so `read.sh` checks all your identities:
+
+**Alias mismatch:** Your phone may reply from a different iMessage address than the one you sent to. Configure aliases so `read.sh` checks all your identities:
 ```bash
 ~/.claude/skills/imessage-notify/whitelist_commands.sh you@example.com --aliases "+15551234567 other@example.com"
 ```
 See [Reply Routing / Aliases](#reply-routing--aliases) above.
+
+**attributedBody storage (macOS Sequoia):** On macOS Sequoia, iMessage sometimes stores message content in the `attributedBody` column (binary blob) instead of the `text` column. This is handled automatically by `query_messages.py`, which decodes the Apple typedstream format as a fallback. If you're on an older version of this tool that doesn't include `query_messages.py`, update via `git pull && ./install.sh`.
 
 ### "Do you want to proceed?" keeps appearing
 
@@ -541,6 +562,7 @@ uv run pytest -m integration
 - [Demo](docs/demo.md) - Interactive walkthrough
 - [Permission Hook Design](docs/permission_hook_plan.md) - Hook-based approval routing architecture
 - [Alias Routing](docs/alias_routing_plan.md) - Multi-identity iMessage routing
+- [attributedBody Fix](docs/attributed_body_fix_plan.md) - Typedstream decoding for macOS Sequoia
 - [iMessage Check](docs/check_imessage_plan.md) - iMessage verification strategy
 - [Packaging](docs/packaging_plan.md) - Distribution and packaging details
 - [Uninstall](docs/uninstall_plan.md) - Uninstall strategy and cleanup
