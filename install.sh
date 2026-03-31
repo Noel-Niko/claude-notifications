@@ -311,8 +311,8 @@ fi
 echo "Installing scripts to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR"
 
-# Copy all .sh and .md files from source
-for f in "${SRC_DIR}"/*.sh "${SRC_DIR}"/*.md; do
+# Copy all .sh, .md, and .py files from source
+for f in "${SRC_DIR}"/*.sh "${SRC_DIR}"/*.md "${SRC_DIR}"/*.py; do
   if [[ -f "$f" ]]; then
     cp "$f" "$INSTALL_DIR/"
   fi
