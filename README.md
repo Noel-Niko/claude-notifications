@@ -59,6 +59,7 @@ Claude will automatically:
 
 Reply **"switch to IDE"** on your phone to switch back to IDE mode.
 
+
 ---
 
 ## Install
